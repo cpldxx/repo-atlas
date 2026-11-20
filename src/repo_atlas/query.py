@@ -174,6 +174,51 @@ def focus(rid: str, nid: str, cap: int = 18, cross: int = 8) -> dict | None:
     return {"node": card(node), "levels": levels, "links": uniq}
 
 
+BRANCHES = ("inside", "calls", "callers")
+
+
+def branch(rid: str, nid: str | None, rel: str, limit: int = 12, offset: int = 0) -> dict | None:
+    """One branch of the mind map: what is inside a node, what it calls, or what calls it.
+
+    With no node, "inside" is the repository's top level (the L4 areas). Every item carries how many
+    things are inside it, it calls and call it, so the map knows which items can be opened further.
+    """
+    if not store.repo(rid) or rel not in BRANCHES:
+        return None
+    node = store.node(rid, nid) if nid else None
+    if nid and not node:
+        return None
+    weights: dict[str, int] = {}
+    if rel == "inside":
+        if node:
+            kids = store.children(rid, nid)
+        else:
+            kids = store.nodes_at(rid, 4)
+            kids.sort(key=lambda n: (ROLE_ORDER.get(n["role"], 9), -(n["deg_in"] + n["deg_out"]), n["id"]))
+        total, page = len(kids), kids[offset:offset + limit]
+    else:
+        if not node:
+            return None
+        inc, out = store.neighbors(rid, node["level"], nid, 100000)
+        edges = inc if rel == "callers" else out
+        key = "src" if rel == "callers" else "dst"
+        total = len(edges)
+        edges = edges[offset:offset + limit]
+        weights = {e[key]: e["weight"] for e in edges}
+        got = {n["id"]: n for n in store.nodes_by_ids(rid, list(weights))}
+        page = [got[i] for i in weights if i in got]
+    counts = store.link_counts(rid, page[0]["level"], [n["id"] for n in page]) if page else {}
+    items = []
+    for n in page:
+        c = card(n)
+        callers, calls = counts.get(n["id"], (0, 0))
+        c["counts"] = {"inside": n.get("children") or 0, "calls": calls, "callers": callers}
+        if n["id"] in weights:
+            c["weight"] = weights[n["id"]]
+        items.append(c)
+    return {"node": card(node) if node else None, "rel": rel, "total": total, "offset": offset, "items": items}
+
+
 def detail(rid: str, nid: str) -> dict | None:
     repo = store.repo(rid)
     node = store.node(rid, nid) if repo else None

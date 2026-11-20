@@ -15,6 +15,12 @@
   "config": {
     "pythonPackage": "repo-atlas"
   },
+  "homepage": "https://repo-atlas-677.pages.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cpldxx/repo-atlas.git"
+  },
+  "bugs": "https://github.com/cpldxx/repo-atlas/issues",
   "keywords": [
     "codebase",
     "onboarding",

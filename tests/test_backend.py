@@ -140,6 +140,18 @@ def test_api_on_a_stored_graph(built, tmp_path, monkeypatch):
     assert d["snippet"]["text"].splitlines()[0] == "line 5" and d["snippet"]["end"] == 19
     assert [x["id"] for x in d["calls"]] == ["s:check"] and {x["id"] for x in d["called_by"]} == {"s:dispatch", "s:test_login"}
 
+    top = c.get("/api/repos/o__r/branch", params={"rel": "inside"}).json()
+    assert top["node"] is None and top["total"] == 3 and top["items"][0]["id"] == "a:app:app"
+    assert top["items"][0]["counts"]["inside"] > 0
+    calls = c.get("/api/repos/o__r/branch", params={"rel": "calls", "node": "s:login"}).json()
+    assert [i["id"] for i in calls["items"]] == ["s:check"] and calls["items"][0]["counts"] == {"inside": 0, "calls": 1, "callers": 1}
+    callers = c.get("/api/repos/o__r/branch", params={"rel": "callers", "node": "s:login", "limit": 1}).json()
+    assert callers["total"] == 2 and len(callers["items"]) == 1
+    inside = c.get("/api/repos/o__r/branch", params={"rel": "inside", "node": "c:app/auth"}).json()
+    assert {i["id"] for i in inside["items"]} == {"m:app/auth"}
+    assert c.get("/api/repos/o__r/branch", params={"rel": "calls"}).status_code == 404
+    assert c.get("/api/repos/o__r/branch", params={"rel": "sideways", "node": "s:login"}).status_code == 422
+
     hits = c.get("/api/repos/o__r/search", params={"q": "check password"}).json()
     assert hits[0]["id"] == "s:check"
     a = c.post("/api/repos/o__r/ask", json={"question": "login", "node": "c:app/auth", "stream": False}).json()

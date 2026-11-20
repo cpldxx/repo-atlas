@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="only light">
 <title>Repo Atlas: a map of any GitHub repo, on your machine</title>
-<meta name="description" content="Repo Atlas reads a GitHub repository once and lays it out in five layers, from whole areas down to single functions, with every arrow a real call. Ask questions and get the code they came from. Runs locally with npx @cpldxx/repo-atlas.">
+<meta name="description" content="Repo Atlas reads a GitHub repository once and lays it out from whole areas down to single functions, as five layers and a mind map you open branch by branch. Ask questions and get the code they came from. Runs locally with npx @cpldxx/repo-atlas.">
 <meta name="page-type" content="software">
 <meta name="site-kind" content="software">
-<meta name="theme-color" content="#FFF7F0">
+<meta name="theme-color" content="#FCFAF7">
 <meta property="og:title" content="Repo Atlas: a map of any GitHub repo">
-<meta property="og:description" content="Five layers, a mind map of what calls what, and answers with sources. Runs on your machine.">
+<meta property="og:description" content="Five layers, a mind map you open branch by branch, and answers with sources. Runs on your machine.">
 <meta property="og:type" content="website">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="styles.css">
@@ -22,13 +22,12 @@
     <a class="skip" href="#main">Skip to content</a>
     <p class="sr" aria-live="polite" data-copy-status></p>
     <a class="brand" href="#top" aria-label="Repo Atlas, top of page">
-      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#FDE3CD" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#F4A372" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
       <span>Repo Atlas</span>
     </a>
     <nav aria-label="Sections">
       <ul class="nav-links">
         <li><a href="#layers">Layers</a></li>
-        <li><a href="#connections">Mind map</a></li>
         <li><a href="#answers">Answers</a></li>
         <li><a href="#local">Local</a></li>
       </ul>
@@ -42,19 +41,28 @@
 
 <main id="main">
   <section class="hero" id="top" data-enter aria-labelledby="h-top">
-    <div class="wrap split">
-      <div class="col-copy hero-copy hero-text">
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
         <h1 id="h-top">A map of any GitHub repo, on your machine</h1>
-        <p class="lead">For your first week on a new codebase. Repo Atlas reads a repository once and lays it out in five layers, from whole areas down to single functions. Every arrow is a real call.</p>
+      </div>
+      <div class="hero-side hero-copy">
+        <p class="lead">Read a repository once, then open it branch by branch, from whole areas down to single functions. Ask anything and get the code it came from.</p>
         <div class="install" data-install>
           <code><span class="prompt" aria-hidden="true">$</span> <span data-cmd>npx @cpldxx/repo-atlas</span></code>
           <button class="btn" type="button" data-copy><span class="label">Copy command</span></button>
         </div>
         <p class="fine">Free to run. Needs Node 18+ and git.</p>
       </div>
-      <figure class="col-visual frame hero-frame">
-        <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>127.0.0.1:47821</span></div>
-        <a class="shot" href="img/hero-layers.jpg"><img src="img/hero-layers.jpg" width="2000" height="1400" alt="Repo Atlas showing fastapi/full-stack-fastapi-template as five floating layers, the top two lifted to uncover the modules layer, with each layer's name, count and most connected parts listed beside them."></a>
+      <figure class="demo" data-demo>
+        <div class="demo-bar">
+          <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
+          <span class="demo-url">127.0.0.1:47821 · Mind map</span>
+          <button class="demo-pause" type="button" data-pause aria-pressed="false" aria-label="Pause the demo"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Pause</span></button>
+        </div>
+        <div class="demo-body">
+          <div class="demo-map" role="img" aria-label="The Repo Atlas mind map of fastapi/full-stack-fastapi-template opening one branch at a time: Backend Application Core, Backend API Endpoints, routes, login.py, and finally the login_access_token() function with its code beside it."></div>
+          <aside class="demo-panel" aria-hidden="true"></aside>
+        </div>
       </figure>
     </div>
   </section>
@@ -62,41 +70,28 @@
   <section class="band" id="layers" aria-labelledby="h-layers">
     <div class="wrap split">
       <div class="col-copy">
-        <h2 id="h-layers">Five map layers, repo to function</h2>
+        <h2 id="h-layers">Five layers, repo to function</h2>
         <p>Pick a layer and it opens flat, callers on the left and what they call on the right. The bottom three come straight from the code. The top two are grouped from the folders and named by the model you choose.</p>
         <ol class="layer-list" data-legend aria-label="Show a layer">
-          <li><button type="button" data-level="4" style="--tint: var(--l4)" aria-pressed="false"><b>L4</b> Areas</button></li>
-          <li><button type="button" data-level="3" style="--tint: var(--l3)" aria-pressed="false"><b>L3</b> Components</button></li>
-          <li><button type="button" data-level="2" style="--tint: var(--l2)" aria-pressed="true"><b>L2</b> Modules</button></li>
-          <li><button type="button" data-level="1" style="--tint: var(--l1)" aria-pressed="false"><b>L1</b> Files</button></li>
-          <li><button type="button" data-level="0" style="--tint: var(--l0)" aria-pressed="false"><b>L0</b> Symbols</button></li>
+          <li><button type="button" data-level="4" aria-pressed="false"><span class="lv" style="--tint: var(--l4)">L4</span> Areas <span class="n">7</span></button></li>
+          <li><button type="button" data-level="3" aria-pressed="false"><span class="lv" style="--tint: var(--l3)">L3</span> Components <span class="n">29</span></button></li>
+          <li><button type="button" data-level="2" aria-pressed="true"><span class="lv" style="--tint: var(--l2)">L2</span> Modules <span class="n">36</span></button></li>
+          <li><button type="button" data-level="1" aria-pressed="false"><span class="lv" style="--tint: var(--l1)">L1</span> Files <span class="n">160</span></button></li>
+          <li><button type="button" data-level="0" aria-pressed="false"><span class="lv" style="--tint: var(--l0)">L0</span> Symbols <span class="n">653</span></button></li>
         </ol>
       </div>
       <div class="col-visual tower-stage" data-tower aria-hidden="true"></div>
     </div>
   </section>
 
-  <section class="band" id="connections" aria-labelledby="h-connections">
+  <section class="band" id="answers" aria-labelledby="h-answers">
     <div class="wrap stack">
       <div class="head-row">
-        <h2 id="h-connections">Mind map: what any part calls</h2>
-        <p>Click anything for its mind map: containers above, contents below, callers on the left, callees on the right. Click a neighbour and it moves to the centre.</p>
+        <h2 id="h-answers">Ask, and get the code it came from</h2>
+        <p>Questions go to the part of the map you're looking at. The answer numbers every source, and the parts it used light up on the map. With no model connected, you still get the code locations.</p>
       </div>
       <figure class="frame wide-frame">
-        <a class="shot" href="img/app-mindmap.jpg"><img src="img/app-mindmap.jpg" width="2880" height="1800" loading="lazy" alt="The mind map around the Backend API Endpoints component: the area that contains it above, the modules, files and functions inside it below, and the components it calls on the right, joined by curved arrows."></a>
-      </figure>
-    </div>
-  </section>
-
-  <section class="band" id="answers" aria-labelledby="h-answers">
-    <div class="wrap split">
-      <div class="col-copy">
-        <h2 id="h-answers">Ask the map, get its sources</h2>
-        <p>Questions go to the part of the map you are looking at. Repo Atlas reads the related code, writes a short answer, and numbers every source so you can open the exact function.</p>
-        <p>With no model connected, you still get the code locations.</p>
-      </div>
-      <figure class="col-visual frame answer-frame">
-        <a class="shot" href="img/ask-answer.jpg"><img src="img/ask-answer.jpg" width="800" height="1250" loading="lazy" alt="The Ask panel: a question about how login creates and checks the access token, answered with the function names from the code and numbered markers, above the list of nine places in the code it read."></a>
+        <a class="shot" href="img/ask.jpg"><img src="img/ask.jpg" width="2880" height="1800" loading="lazy" alt="Repo Atlas centred on login_access_token(): its calls branch out to create_access_token(), authenticate() and Token, with authenticate() opened to verify_password() and get_user_by_email(). The Ask panel answers how login checks the password and creates the token, with numbered sources, and the cited items are outlined in green on the map."></a>
       </figure>
     </div>
   </section>
@@ -104,15 +99,15 @@
   <section class="band" id="local" aria-labelledby="h-local">
     <div class="wrap split">
       <div class="col-copy">
-        <h2 id="h-local">Repo Atlas runs on your machine</h2>
+        <h2 id="h-local">Runs on your machine</h2>
         <ul class="points">
-          <li><b>No account, nothing to sign up for.</b> One command starts it on your computer. Maps and settings live in <code>~/.repo-atlas</code>.</li>
-          <li><b>Your choice of model.</b> With Ollama, everything stays on your computer. With Claude, your question and the code it reads go to Anthropic under your own API key.</li>
-          <li><b>Built on Graphify.</b> The code is parsed into a knowledge graph on your computer, before any model sees it.</li>
+          <li><b>No account.</b> One command starts it on your computer. Maps and settings live in <code>~/.repo-atlas</code>.</li>
+          <li><b>Your model.</b> With Ollama, everything stays on your computer. With Claude, your question and the code it reads go to Anthropic under your own API key.</li>
+          <li><b>Built on Graphify.</b> The code is parsed into a knowledge graph on your computer before any model sees it.</li>
         </ul>
       </div>
       <figure class="col-visual frame">
-        <a class="shot" href="img/settings.jpg"><img src="img/settings.jpg" width="1536" height="1096" loading="lazy" alt="The Settings screen with the model choice: Auto, Ollama, Claude or None, and the address of the local Ollama server."></a>
+        <a class="shot" href="img/settings.jpg"><img src="img/settings.jpg" width="1536" height="1400" loading="lazy" alt="The Settings screen: choose Auto, Ollama, Claude or None, and the address of the local Ollama server."></a>
       </figure>
     </div>
   </section>
@@ -144,19 +139,20 @@
     </div>
     <div class="closing__links">
       <a class="brand" href="#top">
-        <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#FDE3CD" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#F4A372" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
         <span>Repo Atlas</span>
       </a>
       <ul class="foot-links">
         <li><a href="#layers">Layers</a></li>
-        <li><a href="#connections">Mind map</a></li>
         <li><a href="#answers">Answers</a></li>
         <li><a href="#local">Local</a></li>
+        <li><a href="https://github.com/cpldxx/repo-atlas">Source on GitHub</a></li>
         <li><a href="https://github.com/Graphify-Labs/graphify">Graphify</a></li>
       </ul>
     </div>
   </div>
 </footer>
 <script src="site.js" defer></script>
+<script src="demo.js" defer></script>
 </body>
 </html>

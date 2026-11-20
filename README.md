@@ -1,8 +1,11 @@
 # Repo Atlas
 
 Paste a GitHub URL. Repo Atlas reads the repository once into a knowledge graph, shows it as five layers from the
-big picture down to single functions, and answers questions about any part of it from the code itself. Built for
-onboarding: a new team member can see how a codebase is organised and where to start reading.
+big picture down to single functions, lets you open it branch by branch as a mind map (what is inside, what it
+calls, what calls it), and answers questions about any part of it from the code itself. Built for onboarding: a new
+team member can see how a codebase is organised and where to start reading.
+
+Website: https://repo-atlas-677.pages.dev
 
 ## Install and run
 
@@ -49,7 +52,8 @@ names and descriptions of the top two layers and answers questions from the code
 | `GET /api/repos` · `POST /api/repos {url, refresh?, lang?}` · `DELETE /api/repos/{id}` | List, start reading (in the background), delete |
 | `GET /api/repos/{id}` | Progress (`status`, `stage`) and counts per layer |
 | `GET /api/repos/{id}/layers/{0-4}?limit&offset&under` | One layer's nodes and arrows |
-| `GET /api/repos/{id}/focus?node=` | Everything connected to one node, level by level (the mind map) |
+| `GET /api/repos/{id}/branch?rel=inside\|calls\|callers&node=&limit&offset` | One branch of the mind map: what is inside a node, what it calls, or what calls it (no node: the top-level areas) |
+| `GET /api/repos/{id}/focus?node=` | Everything connected to one node, level by level |
 | `GET /api/repos/{id}/node?node=` | Description, code snippet, GitHub link, callers and callees |
 | `POST /api/repos/{id}/explain?node=` | One-sentence description (generated once, then stored) |
 | `GET /api/repos/{id}/search?q=&k=&level=` | Search by name and meaning |

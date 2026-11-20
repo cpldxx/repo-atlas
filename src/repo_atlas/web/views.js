@@ -1,5 +1,6 @@
-// The four canvases: home, the 3D stack of layers, one layer laid flat, and the mind map around one node.
-import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, skeleton, problem, curve, fill, soft, boxIn } from "./lib.js";
+// The canvases: home, the stack of layers, one layer laid flat, and the mind map.
+import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, skeleton, problem, curve, fill, soft, boxIn, getNode } from "./lib.js";
+import { mindMap, PAGE } from "./tree.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const ZERO = { left: 0, top: 0 };
@@ -14,7 +15,7 @@ export function leave() {
   cleanup = [];
 }
 export function applyCited(root = document) {
-  root.querySelectorAll(".node[data-id], .chip[data-id]").forEach((e) => e.classList.toggle("is-cited", state.cited.has(e.dataset.id)));
+  root.querySelectorAll(".node[data-id], .mm-node[data-id]").forEach((e) => e.classList.toggle("is-cited", state.cited.has(e.dataset.id)));
 }
 // Re-run on real size changes only: the observer's first callback fires at once, and bursts are folded into one frame.
 function onResize(el, fn) {
@@ -27,23 +28,9 @@ function onResize(el, fn) {
   ro.observe(el);
   cleanup.push(() => { ro.disconnect(); cancelAnimationFrame(raf); });
 }
-function drawWires(svg, markerId, links, dress) {
-  svg.innerHTML = `<defs><marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1.5 1.5 8 5 1.5 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`;
-  return links.map((l) => {
-    const p = document.createElementNS(NS, "path");
-    dress(p, l);
-    svg.append(p);
-    return { l, p };
-  });
-}
-function wireSvg() {
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("class", "wires");
-  svg.setAttribute("aria-hidden", "true");
-  return svg;
-}
 const label = (n) => (n.level <= 1 ? soft(nameOf(n)) : nameOf(n));
 const layerPath = (rid, lv, limit) => `/repos/${encodeURIComponent(rid)}/layers/${lv}` + q({ limit });
+const lvTag = (lv) => h("span", { class: "lv", style: { "--tint": `var(--l${lv})` } }, `L${lv}`);
 
 // ---------------------------------------------------------------- home
 export async function home(view) {
@@ -79,7 +66,7 @@ export async function home(view) {
   } },
     h("label", { for: "url" }, "GitHub URL"),
     h("div", { class: "add-row" }, input, submit),
-    h("p", { class: "help", id: "url-help" }, "Reads the default branch of a public repository. Your code never leaves this computer."),
+    h("p", { class: "help", id: "url-help" }, "Reads the default branch of a public repository. The code stays on this computer."),
     msg);
 
   fill(view, h("div", { class: "home" },
@@ -101,8 +88,7 @@ export async function home(view) {
     if (!repos.length) {
       fill(list, h("li", { class: "empty" },
         h("p", {}, "No repositories yet. Paste a URL above and you'll get these five layers."),
-        h("ol", { class: "strata" }, [4, 3, 2, 1, 0].map((lv) => h("li", { style: { "--tint": `var(--l${lv})` } },
-          h("span", { class: "st-lv" }, `L${lv}`), ` ${LV[lv].name}`, h("span", { class: "st-hint" }, LV[lv].hint))))));
+        h("ol", { class: "strata" }, [4, 3, 2, 1, 0].map((lv) => h("li", {}, lvTag(lv), ` ${LV[lv].name}`, h("span", { class: "st-hint" }, LV[lv].hint))))));
       return;
     }
     fill(list, repos.map((r) => repoRow(r, refresh)));
@@ -128,11 +114,10 @@ function repoRow(r, refresh) {
     li.append(
       h("a", { class: "repo-main", href: link.repo(r.id) },
         h("span", { class: "repo-name" }, soft(name)),
-        h("ol", { class: "strata", "aria-label": "Count per layer" }, [4, 3, 2, 1, 0].map((n) => h("li", { style: { "--tint": `var(--l${n})` } },
-          h("span", { class: "st-lv" }, `L${n}`), ` ${LV[n].name} `, h("b", {}, num(lv[n])))))),
+        h("ol", { class: "strata", "aria-label": "Count per layer" }, [4, 3, 2, 1, 0].map((n) => h("li", {},
+          lvTag(n), ` ${LV[n].name} `, h("b", {}, num(lv[n])))))),
       acts);
-    // The whole row is already a link for keyboards and screen readers; this is the visible "open" affordance.
-    acts.append(h("a", { class: "btn", href: link.repo(r.id), tabindex: "-1", "aria-hidden": "true", html: "<span>Open map</span>" + icon("arrow") }), del);
+    acts.append(h("a", { class: "btn", href: link.repo(r.id), tabindex: "-1", "aria-hidden": "true", html: "<span>Open</span>" + icon("arrow") }), del);
   } else if (r.status === "error") {
     li.append(h("div", { class: "repo-main" }, h("span", { class: "repo-name" }, soft(name)),
       h("p", { class: "repo-err" }, "Couldn't read it: ", r.error && r.error.includes("not found") ? "Repository not found. Check the URL and that it's public." : (r.error || "unknown problem"))), acts);
@@ -147,7 +132,8 @@ function repoRow(r, refresh) {
   return li;
 }
 
-// ---------------------------------------------------------------- 3D stack
+// ---------------------------------------------------------------- the stack
+// A slab's top shows its layer as dots, one per item, larger for the more connected ones.
 function mini(layer) {
   const W = 440, H = 280, pad = 36;
   let nodes = layer.level >= 3 ? layer.nodes : layer.nodes.filter((n) => n.role === "app");
@@ -155,23 +141,14 @@ function mini(layer) {
   const ranks = [...new Set(nodes.map((n) => n.rank))].sort((a, b) => a - b);
   const cols = new Map();
   nodes.forEach((n) => { const c = ranks.indexOf(n.rank); if (!cols.has(c)) cols.set(c, []); cols.get(c).push(n); });
-  const pos = {};
-  for (const [c, arr] of cols) arr.forEach((n, i) => {
-    const x = ranks.length === 1 ? W / 2 : pad + (W - 2 * pad) * (c / (ranks.length - 1));
-    const y = pad + (H - 2 * pad) * ((i + 0.5) / arr.length);
-    pos[n.id] = [x + (arr.length > 7 ? ((i % 3) - 1) * 11 : 0), y];
-  });
   const max = Math.max(1, ...nodes.map((n) => n.deg_in + n.deg_out));
-  let lines = "", dots = "";
-  for (const l of layer.links.slice(0, 70)) {
-    const a = pos[l.source], b = pos[l.target];
-    if (a && b) lines += `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>`;
-  }
-  for (const n of nodes) {
-    const [x, y] = pos[n.id];
-    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(3 + 8 * Math.sqrt((n.deg_in + n.deg_out) / max)).toFixed(1)}"/>`;
-  }
-  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><g class="mini-links">${lines}</g><g class="mini-dots">${dots}</g></svg>`;
+  let dots = "";
+  for (const [c, arr] of cols) arr.forEach((n, i) => {
+    const x = (ranks.length === 1 ? W / 2 : pad + (W - 2 * pad) * (c / (ranks.length - 1))) + (arr.length > 7 ? ((i % 3) - 1) * 11 : 0);
+    const y = pad + (H - 2 * pad) * ((i + 0.5) / arr.length);
+    dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(3 + 7 * Math.sqrt((n.deg_in + n.deg_out) / max)).toFixed(1)}"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><g class="mini-dots">${dots}</g></svg>`;
 }
 
 export async function stack(view, rid) {
@@ -186,44 +163,40 @@ export async function stack(view, rid) {
     return;
   }
   if (state.route.view !== "stack" || state.route.rid !== rid) return;
-  // Five equal slabs with rounded tops, floating one above another with air between them, each casting a soft
-  // shadow on the one below.
-  // A slab's top face carries a miniature of its layer, uncovered when the slabs above lift out of the way.
   const tilt = h("div", { class: "stack-tilt" });
   const scene = h("div", { class: "stack-scene" }, tilt);
   const legend = h("ol", { class: "stack-legend" });
-  const wrap = h("div", { class: "stack-wrap" }, scene, legend);
+  const side = h("div", { class: "stack-side" }, legend,
+    h("p", { class: "stack-note" }, "L0 to L2 come straight from the code. L3 and L4 are grouped from the folders and named by your model."));
+  const wrap = h("div", { class: "stack-wrap" }, scene, side);
   const slabs = {};
   const each = (fn) => Object.entries(slabs).forEach(([n, el]) => fn(el, +n));
 
   // Picking a layer: the block's top face turns to face you, then the flat view grows out of the rectangle it ended on.
   function pick(lv, e) {
-    if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.button)) return;   // let the browser open a new tab or window
+    if (e && (e.metaKey || e.ctrlKey || e.shiftKey || e.button)) return;
     if (e) e.preventDefault();
     if (wrap.classList.contains("is-picking")) return;
-    if (reduced() || (e && e.detail === 0)) { location.hash = link.layer(rid, lv); return; }   // keyboard: no waiting
+    if (reduced() || (e && e.detail === 0)) { location.hash = link.layer(rid, lv); return; }
     const data = api(layerPath(rid, lv, 90)).catch(() => null);
     wrap.classList.add("is-picking");
     each((el, n) => {
       el.classList.add(n === lv ? "is-picked" : n > lv ? "is-above" : "is-below");
       el.style.setProperty("--lift", n > lv ? "70px" : "0px");
     });
-    // Hand over when both the turn is done and the layer has arrived, so the flat view never opens empty.
     const due = new Promise((done) => { pickTimer = setTimeout(done, 260); });
     Promise.all([data, due]).then(() => {
-      if (!pickTimer || !wrap.isConnected) return;   // left meanwhile (Back, another link): leave() cleared the timer
+      if (!pickTimer || !wrap.isConnected) return;
       handoff = { rid, level: lv, data, rect: slabs[lv].querySelector(".slab-top").getBoundingClientRect() };
       location.hash = link.layer(rid, lv);
     });
   }
-  // Pointing at a block lifts everything above it, uncovering that block's top face. The block itself stays put,
-  // so what is under the pointer never moves away from it.
+  // Pointing at a block lifts everything above it, uncovering that block's top face.
   const hot = (lv, on) => {
     if (wrap.classList.contains("is-picking")) return;
     each((el, n) => {
       el.classList.toggle("is-hot", on && n === lv);
       el.style.setProperty("--lift", on && n > lv ? "44px" : "0px");
-      // the lowest lifted slab keeps its shadow on the surface it left, so the shadow says "this one floated up"
       el.style.setProperty("--drop", on && n === lv + 1 ? "44px" : "0px");
     });
     legend.querySelector(`[data-level="${lv}"]`).classList.toggle("is-hot", on);
@@ -237,32 +210,31 @@ export async function stack(view, rid) {
         pick(lv, e);
       }, onmouseenter: () => hot(lv, true), onmouseleave: () => hot(lv, false) },
       h("div", { class: "slab-cast" }),
-      // the body: thin rounded sheets stacked through the slab's thickness, so the corners follow the rounded top
       Array.from({ length: 12 }, (_, i) => h("div", { class: "slab-layer", style: { "--i": i } })),
       h("div", { class: "slab-top", html: mini(layer) }),
       h("div", { class: "slab-side s-front" }, h("span", { class: "slab-name" }, `L${lv}`)),
       h("div", { class: "slab-side s-left" }));
     tilt.append(slabs[lv]);
-    const top = [...new Set([...layer.nodes].sort((a, b) => (b.deg_in + b.deg_out) - (a.deg_in + a.deg_out)).map(nameOf))].slice(0, 3).join(" · ");
-    legend.append(h("li", {}, h("a", { class: "legend-row", href: link.layer(rid, lv), dataset: { level: lv }, style: { "--tint": `var(--l${lv})` },
+    legend.append(h("li", {}, h("a", { class: "legend-row", href: link.layer(rid, lv), dataset: { level: lv },
       onclick: (e) => pick(lv, e), onmouseenter: () => hot(lv, true), onmouseleave: () => hot(lv, false),
       onfocus: () => hot(lv, true), onblur: () => hot(lv, false) },
-      h("span", { class: "lg-lv" }, `L${lv}`),
-      h("span", { class: "lg-name" }, LV[lv].name,
-        h("span", { class: "lg-hint" }, LV[lv].hint, LV[lv].fact ? "" : " · named by the model"),
-        top ? h("span", { class: "lg-top" }, top) : null),
+      lvTag(lv),
+      h("span", { class: "lg-name" }, LV[lv].name, h("span", { class: "lg-hint" }, LV[lv].hint)),
       h("span", { class: "lg-count" }, num(layer.total), h("span", { class: "sr" }, " items")),
-      h("span", { class: "lg-go", html: icon("arrow") }))));
+      h("span", { class: "lg-go", html: icon("chev") }))));
   });
 
   fill(root,
-    h("header", { class: "view-head" },
-      h("h1", {}, soft(`${repo.owner}/${repo.name}`)),
-      h("p", { class: "view-sub" }, "Pick a layer to open it. Higher layers show the big picture; lower ones show the actual code. ",
-        h("a", { href: `${repo.url}/tree/${repo.commit_sha}`, target: "_blank", rel: "noopener", html: `GitHub ${icon("out", 14)}` }))),
+    h("header", { class: "view-head with-actions" },
+      h("div", {},
+        h("h1", {}, soft(`${repo.owner}/${repo.name}`)),
+        h("p", { class: "view-sub" }, "Pick a layer to open it flat. Higher layers show the big picture, lower ones the actual code.")),
+      h("div", { class: "head-actions" },
+        h("a", { class: "btn primary", href: link.map(rid), html: icon("tree") + "<span>Open mind map</span>" }),
+        h("a", { class: "btn", href: `${repo.url}/tree/${repo.commit_sha}`, target: "_blank", rel: "noopener", html: `<span>GitHub</span>${icon("out", 14)}` }))),
     wrap);
 
-  // The tower builds itself once: blocks drop into place from the bottom up, code first, big picture last.
+  // The tower builds itself once: blocks drop into place from the bottom up.
   if (!reduced()) {
     const pitch = parseFloat(getComputedStyle(slabs[0]).getPropertyValue("--pitch")) || 72;
     each((el, n) => {
@@ -274,30 +246,36 @@ export async function stack(view, rid) {
 }
 
 // ---------------------------------------------------------------- one layer, flat
+// Cards stand in columns, callers on the left and what they call on the right. Arrows stay out of the way until you
+// point at a card (its own arrows), or turn them all on.
 export async function layer(view, rid, level) {
-  const PAGE = 90, MAX_WIRES = 90;
-  let limit = PAGE, data = null, active = null, firstDraw = true;
+  const PAGE_L = 90, MAX_WIRES = 120;
+  let limit = PAGE_L, data = null, active = null, firstDraw = true, every = false;
   const pass = handoff && handoff.rid === rid && handoff.level === level ? handoff : null;
   handoff = null;
 
   const sub = h("p", { class: "view-sub" });
   const tools = h("div", { class: "layer-tools" });
   const scroll = h("div", { class: "layer-scroll", tabindex: "0", role: "region", "aria-label": `L${level} ${LV[level].name} map` });
-  // aria-disabled rather than disabled while loading: a disabled button drops keyboard focus.
   const more = h("button", { class: "btn", type: "button", hidden: true, onclick: async () => {
     if (more.getAttribute("aria-disabled") === "true") return;
     more.setAttribute("aria-disabled", "true");
-    limit = Math.min(2000, limit + PAGE * 2);
+    limit = Math.min(2000, limit + PAGE_L * 2);
     await load();
     more.removeAttribute("aria-disabled");
-    if (more.hidden) scroll.focus();   // everything is loaded: the button is gone, keep the keyboard on the map
+    if (more.hidden) scroll.focus();
   } });
   const moreBox = h("div", { class: "layer-more" }, more);
   const edge = () => scroll.classList.toggle("more-x", scroll.scrollLeft + scroll.clientWidth < scroll.scrollWidth - 4);
   scroll.addEventListener("scroll", edge, { passive: true });
+  const arrows = h("button", { class: "seg-b", type: "button", "aria-pressed": "false", onclick: () => {
+    every = !every;
+    arrows.setAttribute("aria-pressed", String(every));
+    root.classList.toggle("show-every", every);
+  } }, "Show all arrows");
   const head = h("header", { class: "view-head" },
     h("a", { class: "btn quiet back", href: link.repo(rid), html: icon("back") + "<span>All five layers</span>" }),
-    h("h1", {}, `L${level} ${LV[level].name}`), sub);
+    h("h1", {}, lvTag(level), " ", LV[level].name), sub);
   const root = h("div", { class: "layer-view", style: { "--tint": `var(--l${level})` } }, head, tools, scroll, moreBox);
   if (!pass) fill(scroll, skeleton(6));
   fill(view, root);
@@ -314,24 +292,23 @@ export async function layer(view, rid, level) {
     if (state.route.view !== "layer" || state.route.level !== level) return;
     const present = Object.keys(ROLE).filter((r) => data.nodes.some((n) => n.role === r));
     if (!active) active = new Set(present.includes("app") ? present.filter((r) => r === "app" || r === "external") : present);
-    if (before) {   // "Load more" must change what you see: if the new batch is all of a hidden kind, show that kind
+    if (before) {
       const fresh = data.nodes.filter((n) => !before.has(n.id));
       if (fresh.length && !fresh.some((n) => active.has(n.role))) fresh.forEach((n) => active.add(n.role));
     }
     const kids = [];
     if (present.length > 1) {
       kids.push(h("div", { class: "seg", role: "group", "aria-label": "Show" },
-        data.total > data.nodes.length ? h("span", { class: "seg-note" }, `Of ${num(data.nodes.length)} loaded:`) : null,
         present.map((r) => h("button", { class: "seg-b", type: "button", "aria-pressed": String(active.has(r)), onclick: (e) => {
           if (active.has(r) && active.size > 1) active.delete(r); else active.add(r);
           e.currentTarget.setAttribute("aria-pressed", String(active.has(r)));
           draw();
         } }, ROLE[r], h("span", { class: "seg-n" }, num(data.nodes.filter((n) => n.role === r).length))))));
     }
-    kids.push(h("ul", { class: "legend-dots", "aria-label": "Groups" }));
+    kids.push(arrows);
     fill(tools, kids);
     more.hidden = data.total <= data.nodes.length;
-    more.textContent = `Load ${num(Math.min(PAGE * 2, data.total - data.nodes.length))} more`;
+    more.textContent = `Load ${num(Math.min(PAGE_L * 2, data.total - data.nodes.length))} more`;
     draw();
   }
 
@@ -339,42 +316,38 @@ export async function layer(view, rid, level) {
     const at = [scroll.scrollLeft, scroll.scrollTop];
     const shown = data.nodes.filter((n) => active.has(n.role));
     const ranks = [...new Set(shown.map((n) => n.rank))].sort((a, b) => a - b);
-    const groups = data.groups.filter((g) => shown.some((n) => n.parent === g.id));
-    const tinted = groups.length >= 2 && groups.length <= 6;
-    const gi = new Map(groups.map((g, i) => [g.id, i]));
     const map = h("div", { class: "layer-map" + (level <= 1 ? " is-code" : "") });
-    const svg = wireSvg();
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "wires");
+    svg.setAttribute("aria-hidden", "true");
     map.append(svg);
 
-    const under = (n) => level >= 3 ? (n.title ? n.path || "" : "") : level === 2 ? n.path
-      : level === 1 ? (n.path || "").split("/").slice(0, -1).join("/") : `${(n.path || "").split("/").pop()}:${n.line || ""}`;
+    const under = (n) => level === 2 ? n.path : level === 1 ? (n.path || "").split("/").slice(0, -1).join("/") : level === 0 ? (n.path || "").split("/").pop() : "";
     ranks.forEach((r) => {
       const col = shown.filter((n) => n.rank === r).sort((a, b) =>
-        (gi.get(a.parent) ?? 99) - (gi.get(b.parent) ?? 99) || (b.deg_in + b.deg_out) - (a.deg_in + a.deg_out));
+        String(a.parent).localeCompare(String(b.parent)) || (b.deg_in + b.deg_out) - (a.deg_in + a.deg_out));
       map.append(h("ul", { class: "layer-col" }, col.map((n) => h("li", {},
-        h("a", { class: "node" + (n.role !== "app" ? " is-side" : ""), href: link.node(rid, n.id), dataset: { id: n.id }, title: n.path || n.label },
-          tinted && gi.has(n.parent) ? h("i", { class: `dot g${gi.get(n.parent)}`, "aria-hidden": "true" }) : null,
+        h("a", { class: "node" + (n.role !== "app" ? " is-side" : ""), href: link.node(rid, n.id), dataset: { id: n.id },
+          title: [n.path, n.role !== "app" ? ROLE[n.role] : ""].filter(Boolean).join(" · ") || n.label },
           h("span", { class: "node-t" + (level <= 1 ? " mono" : "") }, label(n)),
-          under(n) ? h("span", { class: "node-s mono" }, soft(under(n))) : null,
-          n.role !== "app" ? h("span", { class: "node-role" }, ROLE[n.role]) : null)))));
+          under(n) ? h("span", { class: "node-s" }, soft(under(n))) : null)))));
     });
     fill(scroll, map);
     scroll.scrollLeft = at[0];
     scroll.scrollTop = at[1];
 
     const ids = new Set(shown.map((n) => n.id));
-    const all = data.links.filter((l) => ids.has(l.source) && ids.has(l.target));
-    const links = all.slice(0, MAX_WIRES);
-    fill(sub, `${LV[level].hint} · ${num(shown.length)} of ${num(data.total)} shown · callers on the left, callees on the right`,
-      all.length > links.length ? ` · strongest ${num(links.length)} arrows` : "");
-    fill(tools.querySelector(".legend-dots"), tinted ? groups.map((g, i) =>
-      h("li", {}, h("i", { class: `dot g${i}`, "aria-hidden": "true" }), nameOf(g))) : []);
+    const links = data.links.filter((l) => ids.has(l.source) && ids.has(l.target)).slice(0, MAX_WIRES);
+    fill(sub, `${LV[level].hint} · ${num(shown.length)} of ${num(data.total)} · callers on the left, what they call on the right. Point at a card to see its arrows.`);
 
     const els = Object.fromEntries([...map.querySelectorAll(".node")].map((e) => [e.dataset.id, e]));
-    const paths = drawWires(svg, "arw-l", links, (p, l) => {
-      p.style.strokeWidth = Math.min(2.2, 0.8 + Math.log2(l.weight) * 0.22).toFixed(2);
+    const paths = links.map((l) => {
+      const p = document.createElementNS(NS, "path");
       p.setAttribute("marker-end", "url(#arw-l)");
+      svg.append(p);
+      return { l, p };
     });
+    svg.insertAdjacentHTML("afterbegin", `<defs><marker id="arw-l" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1.5 1.5 8 5 1.5 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`);
     const place = () => {
       const box = {};
       const get = (id) => (box[id] ||= boxIn(els[id], map));
@@ -401,7 +374,6 @@ export async function layer(view, rid, level) {
       });
       paths.forEach(({ l, p }) => p.classList.toggle("is-hot", !!id && (l.source === id || l.target === id)));
     };
-    // A short grace before un-highlighting, so sweeping across the gaps between cards does not make the map pulse.
     Object.values(els).forEach((e) => {
       const on = () => { clearTimeout(off); light(e.dataset.id); };
       const out = () => { clearTimeout(off); off = setTimeout(() => light(null), 90); };
@@ -430,154 +402,62 @@ export async function layer(view, rid, level) {
   await load();
 }
 
-// ---------------------------------------------------------------- mind map around one node
+// ---------------------------------------------------------------- the mind map
+// Centred on one item (what is inside it, what it calls, what calls it), or with no item, on the whole repository.
 export async function focus(view, rid, nodeId) {
-  let cap = innerWidth < 760 ? 6 : 14;
-  const current = view.querySelector(".mm");
-  const old = new Map([...view.querySelectorAll(".mm [data-id]")].map((e) => [e.dataset.id, e.getBoundingClientRect()]));
-  if (current) {
-    // While the next map loads, the old one stays but is plainly "on its way out", and the clicked chip answers at once.
-    current.classList.add("is-loading");
-    current.setAttribute("aria-busy", "true");
-    const going = [...current.querySelectorAll("[data-id]")].find((e) => e.dataset.id === nodeId);
-    if (going) going.classList.add("is-going");
-  } else {
-    fill(view, h("div", { class: "focus-view" }, skeleton(6)));
-  }
-
-  async function load(prev) {
-    let data;
-    try {
-      data = await api(`/repos/${encodeURIComponent(rid)}/focus` + q({ node: nodeId, cap }));
-    } catch (err) {
-      const missing = err.message === "node not found";
-      fill(view, h("div", { class: "focus-view" },
-        h("header", { class: "view-head" }, h("h1", {}, missing ? "Item not found" : "Couldn't load the map")),
-        problem(missing ? "It may have been renamed when the repository was re-read, or the link is wrong." : err.message, missing ? null : () => load(new Map())),
-        h("p", { class: "after-problem" }, h("a", { class: "btn", href: link.repo(rid) }, "All five layers"))));
-      return null;
+  const repo = state.repo.repo;
+  const enc = encodeURIComponent;
+  const branch = (rel) => api(`/repos/${enc(rid)}/branch` + q({ rel, node: nodeId || "", limit: PAGE }));
+  if (!view.querySelector(".focus-view")) fill(view, h("div", { class: "focus-view" }, skeleton(5)));
+  else view.querySelector(".mm-scroll")?.classList.add("is-loading");
+  let d = null, branches;
+  try {
+    if (nodeId) {
+      const [node, inside, calls, callers] = await Promise.all([getNode(rid, nodeId), branch("inside"), branch("calls"), branch("callers")]);
+      d = node;
+      branches = [inside, calls, callers];
+    } else {
+      branches = [await branch("inside")];
     }
-    if (state.route.view !== "focus" || state.route.node !== nodeId) return null;
-    const self = data.node;
-    const mm = h("div", { class: "mm" });
-    const svg = wireSvg();
-    mm.append(svg, h("div", { class: "mm-heads", "aria-hidden": "true" },
-      h("span", {}), h("span", {}, "Callers"), h("span", {}, "Structure"), h("span", {}, "Callees")));
-
-    const chip = (i) => {
-      const me = i.relation === "self";
-      return h(me ? "span" : "a", { class: `chip rel-${i.relation}` + (i.level <= 1 ? " mono" : ""), href: me ? null : link.node(rid, i.id),
-        dataset: { id: i.id }, "aria-current": me ? "true" : null, title: i.path || i.label },
-        h("span", { class: "chip-t" }, label(i)),
-        i.relation === "both" ? h("span", { class: "chip-both", title: "They call each other", html: icon("both", 13) + '<span class="sr">calls each other</span>' }) : null,
-        i.weight && !me ? h("span", { class: "chip-w" }, `×${num(i.weight)}`, h("span", { class: "sr" }, " connections")) : null);
-    };
-    data.levels.forEach((row) => {
-      const lv = row.level;
-      const zone = (rels) => row.items.filter((i) => rels.includes(i.relation));
-      const mid = zone(["self", "ancestor", "descendant"]);
-      const rest = row.total != null ? row.total - mid.filter((i) => i.relation === "descendant").length : 0;
-      const none = () => h("span", { class: "mm-none" }, "—", h("span", { class: "sr" }, "none"));
-      const moreChip = rest <= 0 ? null : cap >= 80
-        ? h("a", { class: "chip more", href: link.layer(rid, lv) }, `${num(rest)} more · view in L${lv}`)
-        : h("button", { class: "chip more", type: "button", onclick: () => {
-          cap = Math.min(80, cap + 20);
-          load(new Map([...mm.querySelectorAll("[data-id]")].map((e) => [e.dataset.id, e.getBoundingClientRect()])));
-        } }, `${num(rest)} more`);
-      mm.append(h("section", { class: "mm-row" + (lv === self.level ? " is-own" : ""), dataset: { level: lv }, style: { "--tint": `var(--l${lv})` }, "aria-label": `L${lv} ${LV[lv].name}` },
-        h("a", { class: "mm-lv", href: link.layer(rid, lv), title: `See all of L${lv} ${LV[lv].name}` },
-          h("span", { class: "lg-lv" }, `L${lv}`), h("span", {}, LV[lv].name)),
-        h("div", { class: "mm-zone mm-in", "aria-label": "Callers" }, zone(["caller"]).map(chip)),
-        h("div", { class: "mm-zone mm-mid", "aria-label": "Structure" }, mid.length ? mid.map(chip) : none(), moreChip),
-        h("div", { class: "mm-zone mm-out", "aria-label": "Callees" }, zone(["both", "callee"]).map(chip))));
-    });
-
-    const root = h("div", { class: "focus-view" },
-      h("header", { class: "view-head" },
-        h("a", { class: "btn quiet back", href: link.layer(rid, self.level), html: icon("back") + `<span>Back to L${self.level} ${LV[self.level].name}</span>` }),
-        h("h1", { class: self.level <= 1 ? "mono" : "" }, label(self)),
-        h("p", { class: "view-sub" }, "Click anything to put it in the centre. ",
-          h("span", { class: "key k-contains" }, "Contains"), h("span", { class: "key k-flow" }, "Calls · uses")),
-        h("button", { class: "btn to-panel", type: "button",
-          onclick: () => document.getElementById("panel").scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }) }, "Details · code · ask")),
-      h("div", { class: "mm-scroll" }, mm));
-    fill(view, root);
-
-    const chips = [...mm.querySelectorAll("[data-id]")];
-    const els = Object.fromEntries(chips.map((e) => [e.dataset.id, e]));
-    const rel = Object.fromEntries(data.levels.flatMap((row) => row.items.map((i) => [i.id, i.relation])));
-    const inner = data.links.filter((l) => l.kind === "flow" && rel[l.source] === "descendant" && rel[l.target] === "descendant");
-    const keep = new Set([4, 3, 2, 1, 0].flatMap((lv) => inner.filter((l) => l.level === lv).sort((a, b) => b.weight - a.weight).slice(0, 3)));
-    const links = data.links.filter((l) => els[l.source] && els[l.target] && (!inner.includes(l) || keep.has(l)));
-    const paths = drawWires(svg, "arw-m", links, (p, l) => {
-      p.setAttribute("class", `w-${l.kind}`);
-      if (l.kind === "flow") p.setAttribute("marker-end", "url(#arw-m)");
-    });
-    // `live` follows chips while they are moving (their on-screen boxes); otherwise use layout offsets, which no
-    // half-finished animation can distort.
-    const place = (live) => {
-      const box = {}, o = live ? mm.getBoundingClientRect() : null;
-      const get = (id) => {
-        if (box[id]) return box[id];
-        if (!live) return (box[id] = boxIn(els[id], mm));
-        const r = els[id].getBoundingClientRect();
-        return (box[id] = { left: r.left - o.left, top: r.top - o.top, right: r.right - o.left, bottom: r.bottom - o.top, width: r.width, height: r.height });
-      };
-      paths.forEach(({ l, p }) => p.setAttribute("d", curve(get(l.source), get(l.target), ZERO, l.kind)));
-    };
-    place(false);
-    onResize(mm, () => place(false));
-
-    let off = 0;
-    const light = (id) => {
-      mm.classList.toggle("has-hot", !!id);
-      paths.forEach(({ l, p }) => p.classList.toggle("is-hot", !!id && (l.source === id || l.target === id)));
-    };
-    chips.forEach((e) => {
-      const on = () => { clearTimeout(off); light(e.dataset.id); };
-      const out = () => { clearTimeout(off); off = setTimeout(() => light(null), 90); };
-      e.addEventListener("mouseenter", on);
-      e.addEventListener("focus", on);
-      e.addEventListener("mouseleave", out);
-      e.addEventListener("blur", out);
-    });
-    cleanup.push(() => clearTimeout(off));
-    applyCited(root);
-
-    if (!reduced()) {
-      // Things that stay travel to their new place; new things arrive from the centre, nearest rows first.
-      const me = mm.querySelector(".rel-self").getBoundingClientRect();
-      const cx = me.left + me.width / 2, cy = me.top + me.height / 2;
-      const anims = [], wait = {};
-      chips.forEach((e) => {
-        const was = prev.get(e.dataset.id), now = e.getBoundingClientRect();
-        const nx = now.left + now.width / 2, ny = now.top + now.height / 2;
-        if (was) {
-          const dx = was.left + was.width / 2 - nx, dy = was.top + was.height / 2 - ny;
-          if (Math.abs(dx) + Math.abs(dy) > 1) {
-            anims.push(e.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 340, easing: "cubic-bezier(.77,0,.175,1)" }));
-          }
-        } else {
-          let dx = (cx - nx) * 0.2, dy = (cy - ny) * 0.2;
-          const d = Math.hypot(dx, dy);
-          if (d > 36) { dx *= 36 / d; dy *= 36 / d; }
-          const far = Math.min(4, Math.abs(+e.closest(".mm-row").dataset.level - self.level));
-          wait[e.dataset.id] = (prev.size ? 80 : 0) + [0, 40, 70, 90, 100][far];
-          anims.push(e.animate([{ opacity: 0, transform: `translate(${dx}px,${dy}px) scale(.96)` }, { opacity: 1, transform: "none" }],
-            { duration: 220, delay: wait[e.dataset.id], easing: "cubic-bezier(.23,1,.32,1)", fill: "backwards" }));
-        }
-      });
-      paths.forEach(({ l, p }) => p.animate([{ opacity: 0 }, { opacity: 1 }],
-        { duration: 200, delay: Math.max(wait[l.source] || 0, wait[l.target] || 0), easing: "ease-out", fill: "backwards" }));
-      if (anims.length) {
-        let run = true;
-        const tick = () => { if (!run) return; place(true); requestAnimationFrame(tick); };
-        requestAnimationFrame(tick);
-        Promise.allSettled(anims.map((a) => a.finished)).then(() => { run = false; if (mm.isConnected) place(false); });
-        cleanup.push(() => { run = false; });
-      }
-    }
-    return self;
+  } catch (err) {
+    const missing = err.message === "node not found";
+    fill(view, h("div", { class: "focus-view" },
+      h("header", { class: "view-head" }, h("h1", {}, missing ? "Item not found" : "Couldn't load the map")),
+      problem(missing ? "It may have been renamed when the repository was re-read, or the link is wrong." : err.message, missing ? null : () => focus(view, rid, nodeId)),
+      h("p", { class: "after-problem" }, h("a", { class: "btn", href: link.repo(rid) }, "All five layers"))));
+    return null;
   }
-  return load(old);
+  const here = state.route;
+  if (here.rid !== rid || (nodeId ? here.view !== "focus" || here.node !== nodeId : here.view !== "map")) return null;
+
+  const name = d ? nameOf(d) : `${repo.owner}/${repo.name}`;
+  const code = d && d.level <= 1;
+  const path = d && d.breadcrumbs && d.breadcrumbs.length
+    ? h("nav", { class: "mm-path", "aria-label": "Part of" }, h("span", { class: "mm-path-k" }, "Part of"),
+      h("ol", {}, d.breadcrumbs.map((b) => h("li", {}, lvTag(b.level), h("a", { href: link.node(rid, b.id) }, b.label)))))
+    : null;
+  const scroll = h("div", { class: "mm-scroll" });
+  const empty = d && !branches.some((b) => b.total)
+    ? h("p", { class: "mm-empty" }, "Nothing is inside it, and nothing calls it or is called by it.") : null;
+  const root = h("div", { class: "focus-view" },
+    h("header", { class: "view-head" },
+      h("a", { class: "btn quiet back", href: d ? link.layer(rid, d.level) : link.repo(rid),
+        html: icon("back") + `<span>${d ? `L${d.level} ${LV[d.level].name}` : "All five layers"}</span>` }),
+      h("h1", { class: code ? "mono" : "" }, code ? soft(name) : name),
+      path,
+      h("p", { class: "view-sub" }, d ? "Open a branch with its arrow. Click any name to put it in the centre."
+        : "The whole repository, from its big parts down to single functions. Open a branch with its arrow."),
+      h("button", { class: "btn to-panel", type: "button",
+        onclick: () => document.getElementById("panel").scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }) }, d ? "Details · code · ask" : "Guide · ask")),
+    empty, scroll);
+  fill(view, root);
+  const map = mindMap(scroll, {
+    rid, flat: !d,
+    root: { node: d ? { id: d.id, level: d.level } : null, label: name, sub: d ? `L${d.level} ${LV[d.level].name}` : "Repository" },
+    branches,
+  });
+  cleanup.push(() => map.stop());
+  if (!reduced()) scroll.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
+  applyCited(root);
+  return d || { id: null, level: null, label: name };
 }

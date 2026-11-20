@@ -141,6 +141,13 @@ def get_focus(rid: str, node: str, cap: int = Query(18, ge=1, le=80), cross: int
     return _found(query.focus(rid, node, cap, cross))
 
 
+@app.get("/api/repos/{rid}/branch")
+def get_branch(rid: str, rel: str = Query(pattern="^(inside|calls|callers)$"), node: str | None = None,
+               limit: int = Query(12, ge=1, le=200), offset: int = Query(0, ge=0)):
+    _ready(rid)
+    return _found(query.branch(rid, node or None, rel, limit, offset))
+
+
 @app.get("/api/repos/{rid}/node")
 def get_node(rid: str, node: str):
     _ready(rid)

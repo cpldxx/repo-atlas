@@ -208,6 +208,22 @@ def neighbors(rid: str, level: int, nid: str, limit: int = 12) -> tuple[list[dic
     return inc, out
 
 
+def link_counts(rid: str, level: int, ids: list[str]) -> dict[str, tuple[int, int]]:
+    """How many distinct callers and callees each node has at its own level: {id: (callers, callees)}."""
+    out = {i: [0, 0] for i in ids}
+    with db() as c:
+        for i in range(0, len(ids), 400):
+            chunk = ids[i:i + 400]
+            marks = ",".join("?" * len(chunk))
+            for r in c.execute(f"SELECT dst, COUNT(*) FROM edges WHERE repo_id=? AND level=? AND dst IN ({marks}) GROUP BY dst",
+                               (rid, level, *chunk)):
+                out[r[0]][0] = r[1]
+            for r in c.execute(f"SELECT src, COUNT(*) FROM edges WHERE repo_id=? AND level=? AND src IN ({marks}) GROUP BY src",
+                               (rid, level, *chunk)):
+                out[r[0]][1] = r[1]
+    return {k: (v[0], v[1]) for k, v in out.items()}
+
+
 def set_text(rid: str, nid: str, title: str | None = None, summary: str | None = None) -> None:
     with db() as c:
         if title is not None:

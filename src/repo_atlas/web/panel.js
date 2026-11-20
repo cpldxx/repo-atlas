@@ -1,5 +1,5 @@
 // Side panel: what the selected thing is (details / first-day guide) and a place to ask about it.
-import { state, LV, ROLE, num, nameOf, icon, h, esc, tick, api, q, link, sse, skeleton, problem, fill, soft } from "./lib.js";
+import { state, LV, ROLE, num, nameOf, icon, h, esc, tick, api, q, link, sse, skeleton, problem, fill, soft, getNode } from "./lib.js";
 import { applyCited } from "./views.js";
 
 const rid = () => state.route.rid;
@@ -10,7 +10,8 @@ export function renderPanel(panel) {
   const r = state.route;
   if (r.view === "home" || r.view === "settings") { panel.hidden = true; mounted = null; fill(panel); return; }
   panel.hidden = false;
-  const infoLabel = r.view === "stack" ? "First-day guide" : "Details";
+  const whole = r.view === "stack" || r.view === "map";
+  const infoLabel = whole ? "First-day guide" : "Details";
   const tabs = [["info", infoLabel], ["ask", "Ask"]];
   const panes = {};
   const tablist = h("div", { class: "tabs", role: "tablist", "aria-label": "Panel" }, tabs.map(([id, text]) =>
@@ -35,7 +36,7 @@ export function renderPanel(panel) {
     for (const k in panes) panes[k].hidden = k !== id;
   }
   fill(panel, tablist, panes.info, panes.ask);
-  if (r.view === "stack") tour(panes.info);
+  if (whole) tour(panes.info);
   else if (r.view === "layer") layerInfo(panes.info, r.level);
   else nodeInfo(panes.info, r.node);
   ask(panes.ask, () => select("ask"));
@@ -91,7 +92,7 @@ async function nodeInfo(pane, id) {
   fill(pane, skeleton(8));
   let d;
   try {
-    d = await api(`/repos/${enc(rid())}/node` + q({ node: id }));
+    d = await getNode(rid(), id);
   } catch (err) {
     const missing = err.message === "node not found";
     fill(pane, problem(missing ? "This item wasn't found." : err.message, missing ? null : () => nodeInfo(pane, id)));

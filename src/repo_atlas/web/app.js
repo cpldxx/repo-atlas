@@ -140,7 +140,11 @@ async function render() {
   renderPanel(panel);
   if (r.view === "stack") await V.stack(view, r.rid);
   else if (r.view === "layer") await V.layer(view, r.rid, r.level);
-  else {
+  else if (r.view === "map") {
+    setCrumbs([...base, ["Mind map", ""]]);
+    document.title = `Mind map · ${name}`;
+    await V.focus(view, r.rid, null);
+  } else {
     const node = await V.focus(view, r.rid, r.node);
     if (!node && state.route === r) panel.hidden = true;
     if (node && state.route === r) {

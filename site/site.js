@@ -31,7 +31,7 @@
   const stage = document.querySelector("[data-tower]");
   if (!stage) return;
   const NS = "http://www.w3.org/2000/svg";
-  const TINT = ["#EDAE86", "#F5C19C", "#FAD3B5", "#FDE3CD", "#FFF1E3"];   // L0 .. L4
+  const TINT = ["#F9BC91", "#FDCBA8", "#FFDAC0", "#FFE7D6", "#FFF3EA"];   // L0 .. L4, as in the app
   const COUNT = [653, 160, 36, 29, 7];
   const W = 400, D = 260, R = 20, T = 22, PITCH = 66, LIFT = 80;
   const RZ = -34 * Math.PI / 180, TILT = 56 * Math.PI / 180;
@@ -62,7 +62,7 @@
     const z0 = lv * PITCH, z1 = z0 + T;
     // the shadow this slab casts on the slab below (on the floor for L0); it stays put when the slab lifts
     const cast = el("g", { class: "cast" }, svg);
-    el("polygon", { points: pts(ring(lv ? z0 - PITCH + T : -24, lv ? 0.9 : 1.05)), fill: "rgba(150,76,36,.30)", filter: "url(#soft)" }, cast);
+    el("polygon", { points: pts(ring(lv ? z0 - PITCH + T : -24, lv ? 0.9 : 1.05)), fill: "rgba(190,110,60,.22)", filter: "url(#soft)" }, cast);
     casts.push(cast);
     const g = el("g", { class: "lift" }, svg);
     lifts.push(g);
@@ -75,12 +75,12 @@
       const nx = (by - ay) / len, ny = -(bx - ax) / len;
       const nxr = nx * cz - ny * sz, nyr = nx * sz + ny * cz;
       if (nyr <= 0.02) continue;
-      const fill = mix(TINT[lv], "#D2683A", 0.2 + 0.14 * Math.max(0, -nxr));
+      const fill = mix(TINT[lv], "#DA7A47", 0.2 + 0.14 * Math.max(0, -nxr));
       el("polygon", { points: pts([top[i], top[j], bot[j], bot[i]]), fill, stroke: fill, "stroke-width": "0.8", "stroke-linejoin": "round" }, g);
     }
     el("polygon", { points: pts(top), fill: TINT[lv], stroke: "rgba(255,255,255,.55)", "stroke-width": "1" }, g);
     const n = COUNT[lv], r = Math.max(1.6, Math.min(9, 60 / Math.sqrt(n)));
-    const dg = el("g", { fill: "#40291C", "fill-opacity": lv ? ".42" : ".34" }, g);
+    const dg = el("g", { fill: "#7A4A2C", "fill-opacity": lv ? ".34" : ".3" }, g);
     for (let i = 0; i < n; i++) {
       const [x, y] = proj((rand() - 0.5) * (W - 50), (rand() - 0.5) * (D - 44), z1);
       el("ellipse", { cx: x.toFixed(1), cy: y.toFixed(1), rx: r.toFixed(1), ry: (r * ct).toFixed(1) }, dg);

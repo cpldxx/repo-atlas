@@ -14,7 +14,7 @@ export const LV = {
   3: { name: "Components", hint: "Groups of folders", fact: false },
   2: { name: "Modules", hint: "Folders", fact: true },
   1: { name: "Files", hint: "Source files", fact: true },
-  0: { name: "Symbols", hint: "Functions · classes", fact: true },
+  0: { name: "Symbols", hint: "Functions and classes", fact: true },
 };
 export const ROLE = { app: "Main", tests: "Tests", examples: "Examples & docs", tooling: "Tooling", external: "External" };
 export const STAGES = [["clone", "Clone"], ["graph", "Extract graph"], ["layers", "Build layers"], ["describe", "Name parts"], ["index", "Index for search"]];
@@ -34,6 +34,8 @@ const PATHS = {
   retry: "M5 12a7 7 0 1 1 2 5m-2 3v-4h4",
   code: "M9 8l-4 4 4 4m6-8 4 4-4 4",
   both: "M7 8h11m-3-3 3 3-3 3M17 16H6m3-3-3 3 3 3",
+  chev: "M10 7l5 5-5 5",
+  tree: "M5 6h4m-4 6h4m-4 6h4M9 6c4 0 4 6 8 6M9 18c4 0 4-6 8-6M9 12h8",
   gear: "M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6zM10.6 3.5h2.8l.5 2.3 1.6.9 2.2-.8 1.4 2.4-1.7 1.6v1.8l1.7 1.6-1.4 2.4-2.2-.8-1.6.9-.5 2.3h-2.8l-.5-2.3-1.6-.9-2.2.8-1.4-2.4 1.7-1.6v-1.8L4.9 8.3l1.4-2.4 2.2.8 1.6-.9z",
 };
 export function icon(name, size = 16) {
@@ -103,6 +105,19 @@ export async function api(path, opts = {}) {
 }
 export const q = (params) => "?" + new URLSearchParams(params).toString();
 
+// The map and the side panel both need the same node's details: fetch it once.
+const nodeMemo = new Map();
+export function getNode(rid, id) {
+  const key = `${rid}\n${id}`;
+  if (!nodeMemo.has(key)) {
+    if (nodeMemo.size > 60) nodeMemo.delete(nodeMemo.keys().next().value);
+    const p = api(`/repos/${encodeURIComponent(rid)}/node` + q({ node: id }));
+    p.catch(() => nodeMemo.delete(key));
+    nodeMemo.set(key, p);
+  }
+  return nodeMemo.get(key);
+}
+
 export async function* sse(resp) {
   const reader = resp.body.getReader();
   const dec = new TextDecoder();
@@ -125,6 +140,7 @@ export const link = {
   repo: (rid) => `#/r/${encodeURIComponent(rid)}`,
   settings: () => "#/settings",
   layer: (rid, lv) => `#/r/${encodeURIComponent(rid)}/L/${lv}`,
+  map: (rid) => `#/r/${encodeURIComponent(rid)}/map`,
   node: (rid, id) => `#/r/${encodeURIComponent(rid)}/n/${encodeURIComponent(id)}`,
 };
 export function parseRoute() {
@@ -133,6 +149,7 @@ export function parseRoute() {
     const rid = decodeURIComponent(p[1]);
     if (p[2] === "L" && /^[0-4]$/.test(p[3] || "")) return { view: "layer", rid, level: +p[3] };
     if (p[2] === "n" && p[3]) return { view: "focus", rid, node: decodeURIComponent(p.slice(3).join("/")) };
+    if (p[2] === "map") return { view: "map", rid };
     return { view: "stack", rid };
   }
   if (p[0] === "settings") return { view: "settings" };
