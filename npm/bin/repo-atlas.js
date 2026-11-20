@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Starts Repo Atlas. The app itself is a Python package; uv downloads it (and a matching Python, if needed) on the
-// first run and caches it, so later runs start in seconds. Arguments are passed through: `npx repo-atlas --help`.
+// first run and caches it, so later runs start in seconds. Arguments are passed through: `npm create repo-atlas -- --help`.
 "use strict";
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");

@@ -1,8 +1,9 @@
 {
-  "name": "@cpldxx/repo-atlas",
+  "name": "create-repo-atlas",
   "version": "0.1.0",
   "description": "Read a GitHub repository once and explore it as five layers, a mind map, and answers written from the code. Runs on your machine.",
   "bin": {
+    "create-repo-atlas": "bin/repo-atlas.js",
     "repo-atlas": "bin/repo-atlas.js"
   },
   "files": [

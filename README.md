@@ -10,7 +10,7 @@ Website: https://repo-atlas-677.pages.dev
 ## Install and run
 
 ```bash
-npx @cpldxx/repo-atlas
+npm create repo-atlas
 ```
 
 That's it: the first run downloads the app (through [uv](https://docs.astral.sh/uv/), which it offers to install
@@ -32,10 +32,10 @@ Without a model, maps and search still work, and questions return the related co
 ### Command line
 
 ```bash
-npx @cpldxx/repo-atlas serve --port 8080 --no-open
-npx @cpldxx/repo-atlas ingest https://github.com/pallets/flask
-npx @cpldxx/repo-atlas ask pallets__flask "What happens when a request comes in?"
-npx @cpldxx/repo-atlas status
+npm create repo-atlas -- serve --port 8080 --no-open
+npm create repo-atlas -- ingest https://github.com/pallets/flask
+npm create repo-atlas -- ask pallets__flask "What happens when a request comes in?"
+npm create repo-atlas -- status
 ```
 
 ## How it works
