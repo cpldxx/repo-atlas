@@ -1,0 +1,45 @@
+[project]
+name = "repo-atlas"
+version = "0.1.0"
+description = "Read a GitHub repository once and explore it as five layers, a mind map, and answers written from the code. Runs on your machine."
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+keywords = ["codebase", "onboarding", "knowledge-graph", "visualization", "graphify", "ollama", "claude"]
+classifiers = [
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Documentation",
+]
+dependencies = [
+    "anthropic>=2.11.0",
+    "fastapi>=0.165.0",
+    "graphifyy>=0.9.113",
+    "httpx>=0.28.1",
+    "networkx>=3.4",
+    "numpy>=2.5.5",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+repo-atlas = "repo_atlas.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_atlas"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/repo_atlas", "tests", "README.md", "pyproject.toml"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
+
+[tool.pytest.ini_options]
+# Only our own tests. Cloned repositories are untrusted and must never be imported or collected.
+testpaths = ["tests"]
+norecursedirs = [".venv", "node_modules", "npm", "site"]

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+dist/
+node_modules/
+*.tgz
+.wrangler/
+.taste-skill/
+npm/vendor/

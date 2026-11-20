@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repo Atlas</title>
+<meta name="description" content="Reads a GitHub repository once and shows it as a five-layer map you can explore and ask questions about.">
+<meta name="theme-color" content="#F1E6DA">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 4 29 11 16 18 3 11z' fill='%23FDE3CD' stroke='%2340291C' stroke-width='1.6' stroke-linejoin='round'/%3E%3Cpath d='M3 16l13 7 13-7M3 21l13 7 13-7' fill='none' stroke='%2340291C' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#panel">Skip to details and questions</a>
+<header class="bar">
+  <a class="brand" href="#/" aria-label="Repo Atlas home">
+    <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#FDE3CD" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    <span>Repo Atlas</span>
+  </a>
+  <nav class="crumbs" id="crumbs" aria-label="Breadcrumb"></nav>
+  <div class="bar-end">
+    <div class="search" id="search" hidden></div>
+    <a class="model" id="model" href="#/settings" aria-live="polite"></a>
+  </div>
+</header>
+<div class="shell" id="shell">
+  <main id="main" tabindex="-1"><div id="view"></div></main>
+  <aside class="panel" id="panel" aria-label="Details and questions" tabindex="-1" hidden></aside>
+</div>
+<noscript><p class="noscript">Repo Atlas needs JavaScript to run.</p></noscript>
+<script type="module" src="app.js"></script>
+</body>
+</html>

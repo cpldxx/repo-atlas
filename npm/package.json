@@ -1,0 +1,32 @@
+{
+  "name": "@cpldxx/repo-atlas",
+  "version": "0.1.0",
+  "description": "Read a GitHub repository once and explore it as five layers, a mind map, and answers written from the code. Runs on your machine.",
+  "bin": {
+    "repo-atlas": "bin/repo-atlas.js"
+  },
+  "files": [
+    "bin",
+    "vendor"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "config": {
+    "pythonPackage": "repo-atlas"
+  },
+  "keywords": [
+    "codebase",
+    "onboarding",
+    "knowledge-graph",
+    "visualization",
+    "ollama",
+    "claude"
+  ],
+  "scripts": {
+    "prepack": "node scripts/vendor-wheel.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
