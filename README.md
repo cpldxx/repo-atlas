@@ -2,8 +2,8 @@
 
 Paste a GitHub URL. Repo Atlas reads the repository once into a knowledge graph, shows it as five layers from the
 big picture down to single functions, lets you open it branch by branch as a mind map (what is inside, what it
-calls, what calls it), and answers questions about any part of it from the code itself. Built for onboarding: a new
-team member can see how a codebase is organised and where to start reading.
+calls, what calls it), and answers questions about any part of it from the code itself. For anyone who wants to see
+what a repository is, how it fits together and where to start reading.
 
 Website: https://repo-atlas-677.pages.dev
 
@@ -57,7 +57,7 @@ names and descriptions of the top two layers and answers questions from the code
 | `GET /api/repos/{id}/node?node=` | Description, code snippet, GitHub link, callers and callees |
 | `POST /api/repos/{id}/explain?node=` | One-sentence description (generated once, then stored) |
 | `GET /api/repos/{id}/search?q=&k=&level=` | Search by name and meaning |
-| `GET /api/repos/{id}/tour` | First-day reading order, entry points, most used |
+| `GET /api/repos/{id}/tour` | Overview: the main parts in reading order, entry points, most used |
 | `POST /api/repos/{id}/ask {question, node?, level?, history?, stream?}` | Answer. SSE by default: `sources` → `delta`… → `done {cited}` |
 
 ## Develop

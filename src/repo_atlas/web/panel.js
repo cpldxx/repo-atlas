@@ -1,4 +1,4 @@
-// Side panel: what the selected thing is (details / first-day guide) and a place to ask about it.
+// Side panel: what the selected thing is (details / overview) and a place to ask about it.
 import { state, LV, ROLE, num, nameOf, icon, h, esc, tick, api, q, link, sse, skeleton, problem, fill, soft, getNode } from "./lib.js";
 import { applyCited } from "./views.js";
 
@@ -15,7 +15,7 @@ export function renderPanel(panel) {
   panel.hidden = false;
   const sel = picked();
   const whole = (r.view === "stack" || r.view === "map") && !sel;
-  const infoLabel = whole ? "First-day guide" : "Details";
+  const infoLabel = whole ? "Overview" : "Details";
   const tabs = [["info", infoLabel], ["ask", "Ask"]];
   const panes = {};
   const tablist = h("div", { class: "tabs", role: "tablist", "aria-label": "Panel" }, tabs.map(([id, text]) =>
@@ -66,8 +66,8 @@ async function tour(pane) {
   }
   const list = (items, extra) => h("ul", { class: "rows" }, items.map((n) => h("li", {}, nodeLink(n, extra ? extra(n) : undefined))));
   fill(pane,
-    h("h2", {}, "First-day guide"),
-    h("p", { class: "pane-lead" }, "Read from callers to callees and the flow comes together."),
+    h("h2", {}, "Overview"),
+    h("p", { class: "pane-lead" }, "The main parts in reading order, where things start, and what everything leans on."),
     h("h3", {}, "Reading order"),
     h("ol", { class: "rows steps" }, t.reading_order.slice(0, 10).map((n) => h("li", {},
       h("a", { class: "row-link", href: link.node(rid(), n.id) }, h("span", { class: "row-t" }, nameOf(n)),

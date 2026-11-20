@@ -4,7 +4,7 @@ version = "0.1.1"
 description = "Read a GitHub repository once and explore it as five layers, a mind map, and answers written from the code. Runs on your machine."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"
-keywords = ["codebase", "onboarding", "knowledge-graph", "visualization", "graphify", "ollama", "claude"]
+keywords = ["codebase", "code-exploration", "knowledge-graph", "visualization", "graphify", "ollama", "claude"]
 classifiers = [
     "Environment :: Web Environment",
     "Intended Audience :: Developers",

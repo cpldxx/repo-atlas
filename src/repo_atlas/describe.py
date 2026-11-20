@@ -63,7 +63,7 @@ what its files and main symbols do, and if that is still unclear say plainly wha
 
 Return JSON only, shaped like {{"{next(iter(parts))}": {{"title": "...", "summary": "..."}}, ...}} with every key above."""
     raw = llm.chat([
-        {"role": "system", "content": "You describe parts of a codebase for new team members. Reply with JSON only."},
+        {"role": "system", "content": "You describe parts of a codebase for someone getting to know it. Reply with JSON only."},
         {"role": "user", "content": prompt},
     ], json_mode=True, temperature=0.1, effort="low")
     try:
@@ -132,7 +132,7 @@ def explain(rid: str, nid: str, lang: str = "en") -> dict | None:
     if snip:
         facts.append("code:\n" + snip["text"][:2400])
     text = llm.chat([
-        {"role": "system", "content": f"You explain code to a new team member. Answer in {LANG.get(lang, 'English')} "
+        {"role": "system", "content": f"You explain code to someone getting to know the codebase. Answer in {LANG.get(lang, 'English')} "
                                       "with one plain sentence, no preamble."},
         {"role": "user", "content": "\n".join(facts) + "\n\nWhat does this do?"},
     ], temperature=0.1, effort="low").strip()

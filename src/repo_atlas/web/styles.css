@@ -196,7 +196,7 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .layer-scroll.more-x { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
 .layer-scroll.is-direct .layer-map { animation: laid .2s ease-out; }
 @keyframes laid { from { opacity: 0; } }
-.layer-map { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 200px); gap: 10px 28px; align-items: start; width: max-content; min-width: 100%; padding: 28px; }
+.layer-map { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 200px); gap: 10px 48px; align-items: start; width: max-content; min-width: 100%; padding: 28px; }
 .layer-map.is-code { grid-auto-columns: minmax(160px, 200px); }
 .layer-col { display: grid; gap: 8px; position: relative; z-index: 1; align-content: start; }
 .layer-col > li { display: grid; }
@@ -218,7 +218,14 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .node.is-callee .node-rel { color: var(--apricot-ink); }
 .node.is-both { border-color: var(--apricot); background: linear-gradient(90deg, var(--sage-wash), var(--apricot-wash)); }
 .node.is-both .node-rel { color: var(--ink-2); }
-.layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) { opacity: .35; }
+/* the rest steps back but stays solid, so the lines pass under it instead of showing through */
+.layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) { background: #FDFBF9; border-color: var(--line); color: #C4B8AE; box-shadow: none; }
+.layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) .node-s,
+.layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) .node-flag { color: #CFC4BB; background: transparent; }
+.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
+.wires path { fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.wires .w-in { stroke: var(--sage); }
+.wires .w-out { stroke: var(--apricot-deep); }
 /* where to begin */
 .node.is-start { border-color: var(--apricot); box-shadow: 0 0 0 3px var(--apricot-wash); }
 .node-flag { justify-self: start; margin-bottom: 3px; padding: 1px 7px; border-radius: 999px; background: var(--apricot); color: var(--ink); font-size: 11px; font-weight: 700; }

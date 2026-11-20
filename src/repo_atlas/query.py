@@ -1,4 +1,4 @@
-"""Read side: overview, one layer, the focus map around one node, node detail, onboarding tour."""
+"""Read side: overview, one layer, the focus map around one node, node detail, overview."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -264,7 +264,7 @@ def detail(rid: str, nid: str) -> dict | None:
 
 
 def tour(rid: str) -> dict | None:
-    """A first-day reading order: the big parts, where execution starts, what everything leans on."""
+    """The overview: the main parts in reading order, where execution starts, what everything leans on."""
     if not store.repo(rid):
         return None
     areas = [n for n in store.nodes_at(rid, 4)]
