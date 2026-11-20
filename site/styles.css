@@ -231,3 +231,6 @@ h2 { font-size: clamp(30px, 3.2vw, 46px); line-height: 1.08; letter-spacing: -.0
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+.doc-link { font-weight: 600; color: var(--apricot-ink); text-decoration: none; }
+.doc-link:hover { text-decoration: underline; }
+.points a { color: var(--apricot-ink); }

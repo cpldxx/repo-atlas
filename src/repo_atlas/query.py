@@ -1,6 +1,7 @@
 """Read side: overview, one layer, the focus map around one node, node detail, overview."""
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -40,6 +41,81 @@ def _lines(path: str, mtime: float) -> tuple[str, ...]:
     return tuple(Path(path).read_text(errors="replace").splitlines())
 
 
+def _block_end(lines: tuple[str, ...], start: int) -> int:
+    """Last line of the definition starting at `start` (1-based) when the graph has no end line for it: the line
+    before the next one indented no deeper than the definition itself (closing brackets excepted)."""
+    first = lines[start - 1] if 0 < start <= len(lines) else ""
+    indent = len(first) - len(first.lstrip())
+    end = start
+    for i in range(start, len(lines)):
+        text = lines[i]
+        if text.strip() and len(text) - len(text.lstrip()) <= indent and not text.lstrip().startswith((")", "]", "}")):
+            break
+        if text.strip():
+            end = i + 1
+    return end
+
+
+def _source_lines(rid: str, n: dict) -> tuple[str, ...]:
+    if not n.get("path"):
+        return ()
+    src = config.repo_paths(rid)[0].resolve()
+    p = (src / n["path"]).resolve()
+    if src not in p.parents or not p.is_file():
+        return ()
+    return _lines(str(p), p.stat().st_mtime)
+
+
+def top_level(rid: str, n: dict, max_lines: int = 60) -> str:
+    """A file's statements outside any function or class (imports, settings, wiring like include_router(...)),
+    which no symbol in the graph covers but which often answer "where is X set up"."""
+    out: list[str] = []
+    inside = False
+    for line in _source_lines(rid, n):
+        if not line.strip():
+            continue
+        if line[0] not in " \t)]}":
+            word = line.split("(")[0].split()[0] if line.split() else ""
+            inside = word in ("def", "async", "class", "function", "export") and ("def " in line or "class " in line or "function " in line)
+            if not inside and not line.startswith("@"):
+                out.append(line)
+        elif not inside and out:
+            out.append(line)   # the rest of a statement that spans lines
+        if len(out) >= max_lines:
+            break
+    return "\n".join(out)
+
+
+_CONST = re.compile(r"^(?:export\s+)?(?:const\s+|let\s+|var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*[^=]+)?=\s*(\S.{0,100})$")
+
+
+def constants_used(rid: str, n: dict, code: str, limit: int = 6) -> list[str]:
+    """Top-level constants of the symbol's file that its code refers to (`ALGORITHM = "HS256"`), so an answer can
+    give the value instead of guessing it."""
+    found: list[str] = []
+    names: set[str] = set()
+    lines = _source_lines(rid, n)
+    for i, line in enumerate(lines):
+        if not line or line[0] in " \t" or line.lstrip().startswith(("def ", "class ", "import ", "from ", "#", "//")):
+            continue
+        m = _CONST.match(line.rstrip())
+        if not m or m.group(1) in names or not re.search(r"\b" + re.escape(m.group(1)) + r"\b", code):
+            continue
+        # a value written over several lines (`x = Thing(\n  a,\n  b,\n)`) is joined into one
+        text, depth, j = line.strip(), 0, i
+        depth = sum(text.count(o) for o in "([{") - sum(text.count(c) for c in ")]}")
+        while depth > 0 and j + 1 < len(lines) and j - i < 8:
+            j += 1
+            part = lines[j].strip()
+            text += ("" if text.endswith(("(", "[", "{")) else " ") + part
+            depth += sum(part.count(o) for o in "([{") - sum(part.count(c) for c in ")]}")
+        names.add(m.group(1))
+        found.append(text if len(text) <= 220 else text[:217] + "...")
+        if len(found) >= limit:
+            break
+    return found
+
+
 def snippet(rid: str, n: dict, max_lines: int = 80) -> dict | None:
     """The code behind a symbol or the top of a file, read from the local clone."""
     if n["level"] > 1 or not n.get("path"):
@@ -51,8 +127,9 @@ def snippet(rid: str, n: dict, max_lines: int = 80) -> dict | None:
     lines = _lines(str(p), p.stat().st_mtime)
     if n["level"] == 0:
         start = n.get("line") or 1
-        end = min(n.get("end_line") or len(lines), start + max_lines - 1, len(lines))
-        whole = (n.get("end_line") or len(lines)) <= end
+        last = n.get("end_line") if (n.get("end_line") or 0) > start else _block_end(lines, start)
+        end = min(last, start + max_lines - 1, len(lines))
+        whole = last <= end
     else:
         start, end = 1, min(len(lines), max_lines)
         whole = len(lines) <= max_lines

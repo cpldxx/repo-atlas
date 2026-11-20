@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en" data-type="software">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="only light">
+<title>Setup guide · Repo Atlas</title>
+<meta name="description" content="Install Repo Atlas with one command, connect Ollama or a Claude API key, use the command line and the local API, and see how accurate the maps and answers are.">
+<meta name="theme-color" content="#FCFAF7">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="docs.css">
+</head>
+<body class="docs-page">
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="skip" href="#main">Skip to content</a>
+    <p class="sr" aria-live="polite" data-copy-status></p>
+    <a class="brand" href="index.html" aria-label="Repo Atlas home">
+      <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#F4A372" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Repo Atlas</span>
+    </a>
+    <nav aria-label="Site">
+      <ul class="nav-links">
+        <li><a href="index.html#layers">Layers</a></li>
+        <li><a href="index.html#answers">Answers</a></li>
+        <li><a href="docs.html" aria-current="page">Docs</a></li>
+      </ul>
+    </nav>
+    <div class="install install-nav" data-install>
+      <code><span class="prompt" aria-hidden="true">$</span> <span data-cmd>npm create repo-atlas</span></code>
+      <button class="btn btn-small" type="button" data-copy><span class="label">Copy command</span></button>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="docs wrap">
+  <aside class="toc" aria-label="On this page">
+    <p class="toc-k">Setup guide</p>
+    <ol>
+      <li><a href="#start">Install and run</a></li>
+      <li><a href="#read">Read a repository</a></li>
+      <li><a href="#model">Connect a model</a></li>
+      <li><a href="#ollama">· Ollama</a></li>
+      <li><a href="#claude">· Claude API key</a></li>
+      <li><a href="#cli">Command line</a></li>
+      <li><a href="#env">Environment variables</a></li>
+      <li><a href="#api">Local API</a></li>
+      <li><a href="#data">Your data</a></li>
+      <li><a href="#accuracy">How accurate is it</a></li>
+      <li><a href="#trouble">Troubleshooting</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <h1>Setup guide</h1>
+    <p class="doc-lead">Repo Atlas runs on your own computer. One command installs and starts it; a model is optional and you bring your own: Ollama on your machine, or Claude with your API key.</p>
+
+    <section id="start" aria-labelledby="h-start">
+      <h2 id="h-start">Install and run</h2>
+      <p>You need <b>Node 18 or newer</b> and <b>git</b>. Then run:</p>
+      <pre class="cmd"><code>npm create repo-atlas</code></pre>
+      <p>The first run takes a minute or two: it downloads the app and its Python packages through <a href="https://docs.astral.sh/uv/">uv</a>. If uv isn't installed, Repo Atlas asks before installing it, or prints the one-line install command. Later runs start in seconds.</p>
+      <p>When it's ready, the terminal shows where it is running and your browser opens it:</p>
+      <pre class="term"><code>  Repo Atlas 0.1.1
+
+  Open   http://127.0.0.1:47821
+  Model  Ollama · qwen3.6:35b
+  Data   ~/.repo-atlas
+
+  Press Ctrl+C to stop.</code></pre>
+      <p>If port 47821 is taken, the next free one is used. Press <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal to stop it. To update to the newest version, run <code>npm create repo-atlas@latest</code>.</p>
+    </section>
+
+    <section id="read" aria-labelledby="h-read">
+      <h2 id="h-read">Read a repository</h2>
+      <ol class="steps">
+        <li>Paste a GitHub URL on the home screen, like <code>https://github.com/pallets/itsdangerous</code>, and press <b>Read repo</b>.</li>
+        <li>Follow the stages: <i>Clone, Extract graph, Build layers, Name parts, Index for search</i>. A small library takes about a minute with a local model; a large application takes longer.</li>
+        <li>Open it: the five-layer stack, the mind map, and <b>Ask</b> in the side panel.</li>
+      </ol>
+      <p>Public repositories only, default branch. A repository is read once and kept. Paste the same URL again to pick up new commits (nothing is redone if the branch hasn't moved). To rebuild anyway: <code>npm create repo-atlas -- ingest &lt;url&gt; --refresh</code>.</p>
+    </section>
+
+    <section id="model" aria-labelledby="h-model">
+      <h2 id="h-model">Connect a model</h2>
+      <p>A model writes the names and descriptions of the top two layers and the answers to your questions. Choose it in <b>Settings</b> (the gear at the top right of the app):</p>
+      <dl class="choices">
+        <dt>Auto</dt><dd>Claude if an API key is set, otherwise the best model installed in Ollama. The default.</dd>
+        <dt>Ollama</dt><dd>A model on your computer. Nothing leaves your machine.</dd>
+        <dt>Claude</dt><dd>Anthropic's API with your own key. Your question and the related code are sent to Anthropic.</dd>
+        <dt>None</dt><dd>Maps and search still work; questions return the related places in the code without a written answer.</dd>
+      </dl>
+      <p>Press <b>Save and test</b> to check the connection. Maps already read keep the names they were made with; new answers use the new model.</p>
+
+      <h3 id="ollama">Ollama (local)</h3>
+      <ol class="steps">
+        <li>Install Ollama from <a href="https://ollama.com/download">ollama.com/download</a> and start it.</li>
+        <li>Pull a chat model. Bigger answers better; pick what your machine can run:
+          <pre class="cmd"><code>ollama pull qwen3.6:35b        # best answers, needs a strong machine
+ollama pull qwen2.5-coder:7b   # lighter, for most laptops</code></pre></li>
+        <li>Pull the embedding model, which lets search find code by meaning and not only by name:
+          <pre class="cmd"><code>ollama pull nomic-embed-text-v2-moe</code></pre></li>
+        <li>Restart Repo Atlas, or press <b>Save and test</b> in Settings.</li>
+      </ol>
+      <p>With <b>Auto</b>, Repo Atlas picks the first of these that is installed: <code>qwen3.6:35b</code>, <code>qwen2.5-coder:32b</code>, <code>qwen2.5:32b</code>, <code>ministral-3:8b</code>, <code>qwen2.5-coder:7b</code>, otherwise any installed chat model. To use a different one, choose it under <b>Ollama → Model</b> in Settings. If Ollama runs on another address, set it there too, or start with <code>ATLAS_OLLAMA_URL</code>.</p>
+
+      <h3 id="claude">Claude API key</h3>
+      <ol class="steps">
+        <li>Create a key at <a href="https://console.anthropic.com/">console.anthropic.com</a>. Usage is billed to your Anthropic account.</li>
+        <li>In Settings choose <b>Claude</b>, paste the key, pick the model (Claude Opus 5.5 by default, or Sonnet 5.5 or Haiku 5.5) and press <b>Save and test</b>.</li>
+      </ol>
+      <p>Or set it only for this session, without saving it:</p>
+      <pre class="cmd"><code>ANTHROPIC_API_KEY=sk-ant-... npm create repo-atlas</code></pre>
+      <ul class="notes">
+        <li>A saved key lives only in <code>~/.repo-atlas/config.json</code>, readable by you alone, and is sent only to Anthropic. The app never shows it again, only its last four characters. <b>Remove saved key</b> deletes it.</li>
+        <li>A key in <code>ANTHROPIC_API_KEY</code> wins over a saved one and is never written to disk.</li>
+        <li>Meaning-based search still uses Ollama's embedding model when it's installed; with Claude alone, search matches names and words.</li>
+      </ul>
+    </section>
+
+    <section id="cli" aria-labelledby="h-cli">
+      <h2 id="h-cli">Command line</h2>
+      <p>Everything after <code>--</code> goes to Repo Atlas.</p>
+      <div class="table"><table>
+        <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>npm create repo-atlas</code></td><td>Start the app and open it in the browser.</td></tr>
+          <tr><td><code>npm create repo-atlas -- serve --port 8080 --no-open</code></td><td>Start on a chosen port, without opening the browser.</td></tr>
+          <tr><td><code>npm create repo-atlas -- ingest &lt;github-url&gt;</code></td><td>Read a repository without the app. <code>--refresh</code> rebuilds it, <code>--no-model</code> skips names, descriptions and the search index.</td></tr>
+          <tr><td><code>npm create repo-atlas -- ask &lt;repo-id&gt; "question"</code></td><td>Ask in the terminal. <code>--node &lt;id&gt;</code> asks about one part. The repo id looks like <code>pallets__itsdangerous</code>.</td></tr>
+          <tr><td><code>npm create repo-atlas -- status</code></td><td>Show the connected model and the repositories you have read.</td></tr>
+          <tr><td><code>npm create repo-atlas -- --version</code></td><td>Print the version.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="env" aria-labelledby="h-env">
+      <h2 id="h-env">Environment variables</h2>
+      <div class="table"><table>
+        <thead><tr><th>Variable</th><th>Default</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td><code>ANTHROPIC_API_KEY</code></td><td>none</td><td>Claude key for this session; wins over a saved key.</td></tr>
+          <tr><td><code>ATLAS_DATA</code></td><td><code>~/.repo-atlas</code></td><td>Where maps, cloned code and settings are kept.</td></tr>
+          <tr><td><code>ATLAS_PORT</code></td><td><code>47821</code></td><td>First port to try.</td></tr>
+          <tr><td><code>ATLAS_OLLAMA_URL</code> or <code>OLLAMA_HOST</code></td><td><code>http://127.0.0.1:11434</code></td><td>Where Ollama is running.</td></tr>
+          <tr><td><code>ATLAS_CHAT_MODEL</code></td><td>best installed</td><td>Ollama chat model to use.</td></tr>
+          <tr><td><code>ATLAS_EMBED_MODEL</code></td><td><code>nomic-embed-text-v2-moe</code></td><td>Ollama embedding model for meaning-based search.</td></tr>
+          <tr><td><code>ATLAS_LANG</code></td><td><code>en</code></td><td>Language of model-written names and answers: <code>en</code> or <code>ko</code>.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="api" aria-labelledby="h-api">
+      <h2 id="h-api">Local API</h2>
+      <p>The app is a small web server on your computer, and everything the screen does is available at <code>http://127.0.0.1:47821/api</code>. It answers only requests from your own machine (other websites in your browser are refused).</p>
+      <div class="table"><table>
+        <thead><tr><th>Request</th><th>Returns</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST /api/repos</code> <span class="mute">{"url": "…"}</span></td><td>Starts reading a repository.</td></tr>
+          <tr><td><code>GET /api/repos</code>, <code>GET /api/repos/{id}</code></td><td>The repositories you've read, with progress and layer counts.</td></tr>
+          <tr><td><code>GET /api/repos/{id}/layers/{0-4}</code></td><td>One layer's parts and the calls between them.</td></tr>
+          <tr><td><code>GET /api/repos/{id}/branch?rel=inside|calls|callers&amp;node=</code></td><td>One branch of the mind map.</td></tr>
+          <tr><td><code>GET /api/repos/{id}/node?node=</code></td><td>One part: description, code, GitHub link, callers and callees.</td></tr>
+          <tr><td><code>GET /api/repos/{id}/search?q=</code></td><td>Parts matching words or meaning.</td></tr>
+          <tr><td><code>POST /api/repos/{id}/ask</code></td><td>An answer with numbered sources (streamed as server-sent events, or <code>"stream": false</code> for one JSON reply).</td></tr>
+          <tr><td><code>GET /api/settings</code>, <code>PUT /api/settings</code></td><td>The model settings (a saved key is never returned).</td></tr>
+          <tr><td><code>GET /api/health</code></td><td>Version, data folder and connected model.</td></tr>
+        </tbody>
+      </table></div>
+      <p>For example:</p>
+      <pre class="cmd"><code>curl -s http://127.0.0.1:47821/api/repos/pallets__itsdangerous/ask \
+  -H 'content-type: application/json' \
+  -d '{"question": "Which error is raised when a timed signature is too old?", "stream": false}'</code></pre>
+    </section>
+
+    <section id="data" aria-labelledby="h-data">
+      <h2 id="h-data">Your data</h2>
+      <p>Everything lives in <code>~/.repo-atlas</code>: <code>atlas.db</code> (the maps), <code>repos/</code> (the cloned code) and <code>config.json</code> (settings). No account, nothing sent anywhere except to Claude when you choose it. Delete a repository from the home screen; to remove Repo Atlas completely, delete that folder.</p>
+    </section>
+
+    <section id="accuracy" aria-labelledby="h-accuracy">
+      <h2 id="h-accuracy">How accurate is it</h2>
+      <p>The bottom three layers (symbols, files, folders) and every arrow come straight from the code: <a href="https://github.com/Graphify-Labs/graphify">Graphify</a> parses it on your computer. The top two layers are grouped from the folders, and only their names and descriptions are written by the model. Answers use only the code they're given and number every source.</p>
+      <p>We measured it on two repositories, with a local Ollama model (<code>qwen3.6:35b</code>):</p>
+      <div class="table"><table>
+        <thead><tr><th></th><th>fastapi/full-stack-fastapi-template</th><th>pallets/itsdangerous</th></tr></thead>
+        <tbody>
+          <tr><td>Arrows confirmed in the source</td><td>766 of 768</td><td>178 of 178</td></tr>
+          <tr><td>Calls in the code that have an arrow</td><td>194 of 194</td><td>48 of 52</td></tr>
+          <tr><td>Answers with the right facts</td><td>11 of 12</td><td>5 of 5</td></tr>
+          <tr><td>Questions about things not in the repo, answered "not there"</td><td>2 of 2</td><td>1 of 1</td></tr>
+          <tr><td>Citations to sources that don't exist</td><td>0</td><td>0</td></tr>
+        </tbody>
+      </table></div>
+      <p>Limits worth knowing: calls made dynamically (by name in a string, through dependency injection containers) can't be seen by a parser; very large repositories show the most connected parts first; private repositories aren't supported yet. The scripts behind these numbers are in <a href="https://github.com/cpldxx/repo-atlas/tree/main/evals">evals/</a>.</p>
+    </section>
+
+    <section id="trouble" aria-labelledby="h-trouble">
+      <h2 id="h-trouble">Troubleshooting</h2>
+      <dl class="faq">
+        <dt>"Repo Atlas runs on uv … Install uv now?"</dt>
+        <dd>Answer yes, or install it yourself with <code>curl -LsSf https://astral.sh/uv/install.sh | sh</code> (on Windows: <code>powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"</code>) and run the command again.</dd>
+        <dt>"Repo Atlas needs git"</dt>
+        <dd>Install git (on a Mac: <code>xcode-select --install</code>), then run again.</dd>
+        <dt>The top bar says "Connect a model"</dt>
+        <dd>Ollama isn't running or has no chat model. Start Ollama, <code>ollama pull</code> a model, and press <b>Save and test</b>. Or add a Claude key.</dd>
+        <dt>Answers are slow</dt>
+        <dd>A local model answers in about 10–15 seconds on a strong machine. Pick a smaller Ollama model, or use Claude.</dd>
+        <dt>An answer says the sources don't cover it</dt>
+        <dd>Search didn't find the right code. Open the part you're asking about first (questions then go to it), or ask with words that appear in the code.</dd>
+        <dt>Port already in use</dt>
+        <dd>The next free port is used automatically; or choose one with <code>-- serve --port 8080</code>.</dd>
+      </dl>
+    </section>
+  </article>
+</main>
+
+<footer class="footer docs-foot">
+  <div class="wrap closing__links">
+    <a class="brand" href="index.html">
+      <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><path d="M16 4 29 11 16 18 3 11z" fill="#F4A372" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 16l13 7 13-7M3 21l13 7 13-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Repo Atlas</span>
+    </a>
+    <ul class="foot-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="docs.html">Docs</a></li>
+      <li><a href="https://github.com/cpldxx/repo-atlas">Source on GitHub</a></li>
+      <li><a href="https://github.com/Graphify-Labs/graphify">Graphify</a></li>
+    </ul>
+  </div>
+</footer>
+<script src="site.js" defer></script>
+</body>
+</html>

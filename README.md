@@ -19,17 +19,35 @@ if you don't have it), starts it on http://127.0.0.1:47821 and opens your browse
 Needs git (to download repositories). No account, no server: everything runs and stays on your computer, in
 `~/.repo-atlas`.
 
+Full setup guide (Ollama, Claude API key, command line, environment variables, local API, troubleshooting):
+https://repo-atlas-677.pages.dev/docs.html
+
 ### Connect a model (optional)
 
 Names, descriptions and answers are written by a model you choose in **Settings** (the gear at the top right):
+**Auto** (Claude if a key is set, otherwise Ollama), **Ollama**, **Claude** or **None**. Press **Save and test**.
 
-- **Ollama**, running locally. Any chat model works; `nomic-embed-text-v2-moe` adds search by meaning.
-- **Claude**, with your own API key from console.anthropic.com. Paste it in Settings or start with
-  `ANTHROPIC_API_KEY` set. Usage is billed to your Anthropic account.
+**Ollama**, on your computer: install it from ollama.com, then
+
+```bash
+ollama pull qwen3.6:35b              # or a lighter one, like qwen2.5-coder:7b
+ollama pull nomic-embed-text-v2-moe  # search by meaning
+```
+
+**Claude**, with your own key from console.anthropic.com: paste it in Settings, or for one session
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... npm create repo-atlas
+```
+
+A saved key stays in `~/.repo-atlas/config.json` (readable only by you) and is sent only to Anthropic; usage is
+billed to your Anthropic account. With Claude, your question and the code it reads go to Anthropic.
 
 Without a model, maps and search still work, and questions return the related code locations.
 
 ### Command line
+
+Everything after `--` goes to Repo Atlas.
 
 ```bash
 npm create repo-atlas -- serve --port 8080 --no-open
@@ -38,13 +56,38 @@ npm create repo-atlas -- ask pallets__flask "What happens when a request comes i
 npm create repo-atlas -- status
 ```
 
+| Variable | Default | Use |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | none | Claude key for this session (wins over a saved key) |
+| `ATLAS_DATA` | `~/.repo-atlas` | Maps, cloned code and settings |
+| `ATLAS_PORT` | `47821` | First port to try |
+| `ATLAS_OLLAMA_URL` / `OLLAMA_HOST` | `http://127.0.0.1:11434` | Where Ollama runs |
+| `ATLAS_CHAT_MODEL` | best installed | Ollama chat model |
+| `ATLAS_EMBED_MODEL` | `nomic-embed-text-v2-moe` | Ollama embedding model |
+| `ATLAS_LANG` | `en` | `en` or `ko` for model-written names and answers |
+
 ## How it works
 
 Graphify ([Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify), open source) parses the code locally
 into a knowledge graph. Repo Atlas turns it into five layers and stores them in SQLite; the model only writes the
 names and descriptions of the top two layers and answers questions from the code it is given.
 
+## How accurate it is
+
+Measured on two repositories with a local Ollama model (`qwen3.6:35b`); the scripts are in [`evals/`](evals/).
+
+| | fastapi/full-stack-fastapi-template | pallets/itsdangerous |
+|---|---|---|
+| Arrows confirmed in the source | 766 / 768 | 178 / 178 |
+| Calls in the code that have an arrow | 194 / 194 | 48 / 52 |
+| Answers with the right facts | 11 / 12 | 5 / 5 |
+| "Not in this repository" answered that way | 2 / 2 | 1 / 1 |
+| Citations to sources that don't exist | 0 | 0 |
+
 ## API (default port 47821)
+
+Only requests from your own machine are answered.
+
 
 | Request | What it does |
 |---|---|
@@ -71,7 +114,7 @@ uv run pytest -q
 ```
 
 `src/repo_atlas/` is the Python package (the UI is in `src/repo_atlas/web/`, plain HTML/CSS/JS with no build step),
-`npm/` is the `npx` launcher, `site/` is the landing page. `REPO_ATLAS_FROM=./dist/<wheel>` makes the launcher run a
+`npm/` is the `npm create` launcher, `site/` is the landing page and setup guide, `evals/` the accuracy checks. `REPO_ATLAS_FROM=./dist/<wheel>` makes the launcher run a
 local build. Set `ATLAS_LANG=ko` for Korean names and answers, `ATLAS_DATA` for another data folder.
 
 ## Credits

@@ -102,6 +102,15 @@ def test_split_components_breaks_up_a_dominant_folder():
     assert len(layering.split_components(many, 2, 8)) <= 14
 
 
+def test_code_of_a_function_without_an_end_line_stops_at_the_next_one():
+    from repo_atlas import query
+    src = ("def first(a):", "    if a:", "        return 1", "", "    return 2", "", "def second():", "    pass",
+           "class K:", "    def m(self):", "        x = call(", "            1,", "        )", "        return x", "    def n(self):", "        pass")
+    assert query._block_end(src, 1) == 5        # stops before `def second`, skipping the blank line
+    assert query._block_end(src, 10) == 14      # a method: a closing bracket at a shallower depth doesn't end it
+    assert query._block_end(src, 7) == 8
+
+
 def test_api_on_a_stored_graph(built, tmp_path, monkeypatch):
     from repo_atlas import config, llm, store
     monkeypatch.setattr(config, "DATA", tmp_path)

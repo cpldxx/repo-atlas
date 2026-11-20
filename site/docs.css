@@ -1,0 +1,55 @@
+/* The setup guide: the landing page's look, laid out for reading. */
+.docs-page { font-size: 16.5px; }
+.docs { display: grid; grid-template-columns: 220px minmax(0, 760px); gap: 56px; padding: calc(var(--nav-h) + 48px) 0 80px; align-items: start; }
+.toc { position: sticky; top: calc(var(--nav-h) + 32px); font-size: 14px; }
+.toc-k { font-weight: 700; margin-bottom: 10px; }
+.toc ol { display: grid; gap: 2px; border-left: 1px solid var(--line-2); }
+.toc a { display: block; padding: 5px 0 5px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--ink-2); text-decoration: none; transition: color .15s, border-color .15s; }
+.toc a:hover { color: var(--ink); border-left-color: var(--apricot); }
+.doc h1 { font-size: clamp(34px, 3.6vw, 48px); }
+.doc-lead { font-size: 19px; color: var(--ink-2); margin-top: 14px; max-width: 36em; }
+.doc section { padding-top: 44px; margin-top: 44px; border-top: 1px solid var(--line); scroll-margin-top: calc(var(--nav-h) + 16px); }
+.doc h2 { font-size: 28px; margin-bottom: 14px; }
+.doc h3 { font-size: 19px; margin: 30px 0 10px; scroll-margin-top: calc(var(--nav-h) + 16px); }
+.doc p, .doc li, .doc dd { color: var(--ink-2); line-height: 1.65; }
+.doc p + p, .doc p + pre, .doc pre + p, .doc ol + p, .doc p + .table, .doc .table + p, .doc p + dl, .doc dl + p, .doc p + ol, .doc p + ul { margin-top: 14px; }
+.doc b { color: var(--ink); }
+.doc a { color: var(--apricot-ink); }
+.doc code { font-size: .88em; background: var(--sand); padding: 1px 6px; border-radius: 6px; color: var(--ink); overflow-wrap: anywhere; }
+.doc pre { margin: 12px 0 0; padding: 14px 18px; border-radius: 12px; overflow-x: auto; }
+.doc pre code { background: none; padding: 0; font-size: 14px; line-height: 1.65; overflow-wrap: normal; white-space: pre; }
+.doc pre.cmd { background: var(--card); border: 1px solid var(--line); }
+.doc pre.term { background: #2B2420; color: #F6EEE7; }
+.doc pre.term code { color: inherit; }
+kbd { font: 600 .85em var(--font); padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--card); }
+.steps { list-style: decimal; padding-left: 22px; display: grid; gap: 10px; margin-top: 12px; }
+.steps li::marker { color: var(--apricot-deep); font-weight: 700; }
+.notes { list-style: disc; padding-left: 22px; display: grid; gap: 8px; margin-top: 14px; }
+.choices, .faq { margin: 12px 0 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 20px; }
+.choices dt, .faq dt { font-weight: 700; color: var(--ink); }
+.choices dd, .faq dd { margin: 0; }
+.faq { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.faq dt { margin-top: 14px; }
+.faq dt:first-child { margin-top: 0; }
+.table { margin-top: 14px; overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+.table table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.table th, .table td { text-align: left; vertical-align: top; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.table tr:last-child td { border-bottom: 0; }
+.table th { font-weight: 700; color: var(--ink); background: var(--paper); }
+.table td { color: var(--ink-2); }
+.table td:first-child { color: var(--ink); }
+.mute { color: var(--ink-3); font-size: .9em; }
+.nav-links a[aria-current="page"] { color: var(--ink); background: var(--sand); }
+.docs-foot { padding: 28px 0 40px; background: var(--sand); }
+.docs-foot .closing__links { border-top: 0; padding-top: 0; }
+@media (max-width: 960px) {
+  .docs { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-top: calc(var(--nav-h) + 28px); }
+  .toc { position: static; }
+  .toc ol { grid-template-columns: repeat(2, minmax(0, 1fr)); border-left: 0; }
+  .toc a { padding-left: 0; border-left: 0; }
+  .choices { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .choices dd { margin-bottom: 10px; }
+}
+/* long commands scroll inside their box instead of widening the page */
+.doc, .doc section, .steps, .steps > li, .notes > li { min-width: 0; }
+.doc pre { max-width: 100%; }

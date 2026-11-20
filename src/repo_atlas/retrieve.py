@@ -8,6 +8,8 @@ that to the local model. Every answer comes back with the nodes it used.
 """
 from __future__ import annotations
 
+import json
+
 import math
 import re
 from collections import Counter
@@ -49,9 +51,20 @@ def tokens(text: str) -> list[str]:
     return out
 
 
-def _text(n: dict, kids: list[str]) -> str:
-    bits = [n["label"], n["path"] or "", n["title"] or "", n["summary"] or "", n["doc"] or "", " ".join(kids)]
+def _text(n: dict, kids: list[str], code: str = "") -> str:
+    bits = [n["label"], n["path"] or "", n["title"] or "", n["summary"] or "", n["doc"] or "", " ".join(kids), code]
     return " ".join(b for b in bits if b)
+
+
+def _code(rid: str, n: dict) -> str:
+    """The code a node stands for, so search matches what it does and not only its name: a function's body (with its
+    comments), or a file's top-level statements (settings, wiring, constants)."""
+    if n["level"] == 0:
+        snip = query.snippet(rid, n, 40)
+        return snip["text"][:1500] if snip else ""
+    if n["level"] == 1:
+        return query.top_level(rid, n, 60)[:1500]
+    return ""
 
 
 def _corpus(rid: str) -> tuple[list[dict], list[str]]:
@@ -64,16 +77,13 @@ def _corpus(rid: str) -> tuple[list[dict], list[str]]:
                 kids[n["parent"]].append(n["label"])
     nodes.sort(key=lambda n: (n["level"] == 0, -(n["deg_in"] + n["deg_out"])))
     nodes = nodes[:MAX_INDEXED]
-    return nodes, [_text(n, kids.get(n["id"], [])) for n in nodes]
+    return nodes, [_text(n, kids.get(n["id"], []), _code(rid, n)) for n in nodes]
 
 
 def build_index(rid: str) -> int:
     """Embed every node once and store the vectors. Returns how many were embedded."""
     nodes, texts = _corpus(rid)
-    rich = []
-    for n, t in zip(nodes, texts):
-        snip = query.snippet(rid, n, 14) if n["level"] <= 1 else None  # signature and the start of the docstring
-        rich.append("search_document: " + (t + ("\n" + snip["text"][:600] if snip else ""))[:1500])
+    rich = ["search_document: " + t[:1800] for t in texts]   # names, descriptions and the code itself
     vecs = llm.embed(rich)
     _cache.pop(rid, None)
     if not vecs:
@@ -170,9 +180,16 @@ def _block(rid: str, repo: dict, n: dict) -> dict:
         body.append("calls/uses: " + ", ".join(near[e["dst"]]["label"] for e in out if e["dst"] in near))
     if inc:
         body.append("called/used by: " + ", ".join(near[e["src"]]["label"] for e in inc if e["src"] in near))
-    snip = query.snippet(rid, n, 48 if n["level"] == 0 else 24)
+    snip = query.snippet(rid, n, 48) if n["level"] == 0 else None
     if snip:
+        consts = query.constants_used(rid, n, snip["text"])
+        if consts:   # values the code refers to by name, defined at the top of its file
+            body.append("constants in this file: " + "; ".join(consts))
         body.append(f"code (lines {snip['start']}-{snip['end']}):\n{snip['text'][:2000]}")
+    elif n["level"] == 1:
+        top = query.top_level(rid, n, 40)
+        if top:
+            body.append(f"top-level code of the file:\n{top[:1800]}")
     return {"id": n["id"], "level": n["level"], "kind": n["kind"], "label": n["label"], "title": n.get("title"),
             "path": n.get("path"), "line": n.get("line"), "url": query.github_url(repo, n),
             "text": head + "\n" + "\n".join(body)}
@@ -243,12 +260,35 @@ def gather(rid: str, question: str, node_id: str | None = None, level: int | Non
     return blocks
 
 
+def code_words(question: str) -> str:
+    """Words the code that answers a question likely contains (function names, library calls), so a question asked in
+    plain words still finds that code. One short model call; without a model, or on any problem, nothing is added."""
+    if not llm.pick_chat_model():
+        return ""
+    try:
+        raw = llm.chat([
+            {"role": "system", "content": "You help search a codebase. Reply with JSON only."},
+            {"role": "user", "content": f"A question about a codebase: {question[:600]!r}\n"
+                                        "List up to 6 short words or identifiers likely to appear in the code that answers it "
+                                        "(function or method names, library calls, keywords). Reply as {\"terms\": [\"...\"]}."},
+        ], json_mode=True, temperature=0, effort="low", timeout=90)
+        data = json.loads(raw) if isinstance(raw, str) else raw
+        terms = data.get("terms", []) if isinstance(data, dict) else []
+        return " ".join(str(t)[:40] for t in terms[:6] if isinstance(t, (str, int)))
+    except Exception:
+        return ""
+
+
 def ask(rid: str, question: str, node_id: str | None = None, level: int | None = None,
         lang: str | None = None, history: list[dict] | None = None) -> Iterator[dict]:
     """Answer a question. Yields events: sources, then text deltas, then done."""
     repo = store.repo(rid)
     lang = lang or (repo or {}).get("lang") or config.DEFAULT_LANG
-    blocks = gather(rid, question, node_id, level)
+    # A follow-up ("and what if it's inactive?") is searched together with the question before it, and a question in
+    # plain words also with the code words its answer likely contains ("timing attack" -> compare_digest).
+    earlier = [h["content"] for h in (history or []) if h.get("role") == "user" and isinstance(h.get("content"), str)]
+    wanted = ((earlier[-1][:300] + " ") if earlier else "") + question
+    blocks = gather(rid, (wanted + " " + code_words(wanted)).strip(), node_id, level)
     yield {"type": "sources", "sources": [{k: b[k] for k in ("n", "id", "level", "kind", "label", "title", "path", "line", "url")}
                                           for b in blocks]}
     model = llm.pick_chat_model()
