@@ -5,7 +5,7 @@ big picture down to single functions, lets you open it branch by branch as a min
 calls, what calls it), and answers questions about any part of it from the code itself. For anyone who wants to see
 what a repository is, how it fits together and where to start reading.
 
-Website: https://repo-atlas-677.pages.dev
+Website: https://repoatlas.pages.dev
 
 ## Install and run
 
@@ -20,7 +20,7 @@ Needs git (to download repositories). No account, no server: everything runs and
 `~/.repo-atlas`.
 
 Full setup guide (Ollama, Claude API key, command line, environment variables, local API, troubleshooting):
-https://repo-atlas-677.pages.dev/docs.html
+https://repoatlas.pages.dev/docs
 
 ### Connect a model (optional)
 

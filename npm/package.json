@@ -16,7 +16,7 @@
   "config": {
     "pythonPackage": "repo-atlas"
   },
-  "homepage": "https://repo-atlas-677.pages.dev",
+  "homepage": "https://repoatlas.pages.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/cpldxx/repo-atlas.git"
