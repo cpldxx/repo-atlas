@@ -3,6 +3,7 @@ import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, s
 import { mindMap, PAGE } from "./tree.js";
 
 const NS = "http://www.w3.org/2000/svg";
+const ARROW = 9;     // arrowhead length on the layer map
 let poll = null, pickTimer = null, handoff = null, cleanup = [];
 
 export function leave() {
@@ -312,7 +313,8 @@ export async function layer(view, rid, level) {
     svg.setAttribute("class", "wires");
     svg.setAttribute("aria-hidden", "true");
     // filled arrowheads whose tip is the very end of the line (refX = tip), sized in pixels, not by line width
-    const head = (id, color) => `<marker id="${id}" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 1 10 5 0 9z" fill="${color}"/></marker>`;
+    // The line stops where the arrowhead's base is and the head reaches the card, so no line pokes past its tip.
+    const head = (id, color) => `<marker id="${id}" viewBox="0 0 10 10" refX="0" refY="5" markerUnits="userSpaceOnUse" markerWidth="${ARROW}" markerHeight="${ARROW}" orient="auto"><path d="M0 1 10 5 0 9z" fill="${color}"/></marker>`;
     svg.innerHTML = `<defs>${head("arw-in", "#557A4A")}${head("arw-out", "#D97A45")}</defs>`;
     const lines = document.createElementNS(NS, "g");
     svg.append(lines);
@@ -388,17 +390,29 @@ export async function layer(view, rid, level) {
       }
       return y;
     };
-    // a path from a start point through curve (c) and straight segments; reversed, it runs the other way
-    const pathOf = (start, segs, reverse) => {
-      const f = (n) => n.toFixed(1);
-      if (!reverse) return `M${f(start[0])} ${f(start[1])}` + segs.map((g) => g.c ? ` C${g.c.map(f).join(" ")} ${f(g.to[0])} ${f(g.to[1])}` : ` L${f(g.to[0])} ${f(g.to[1])}`).join("");
-      const pts = [start, ...segs.map((g) => g.to)];
-      let out = `M${f(pts[pts.length - 1][0])} ${f(pts[pts.length - 1][1])}`;
-      for (let i = segs.length - 1; i >= 0; i--) {
-        const g = segs[i], to = pts[i];
-        out += g.c ? ` C${f(g.c[2])} ${f(g.c[3])} ${f(g.c[0])} ${f(g.c[1])} ${f(to[0])} ${f(to[1])}` : ` L${f(to[0])} ${f(to[1])}`;
+    // A line from one card's edge to another's: a short straight start, a bend in the gap beside the first card,
+    // (for cards further away) a straight run on a free lane and a second bend in the gap before the last card,
+    // then a straight approach, so the arrowhead always sits on a straight piece of line, its tip on the card.
+    const GAP = parseFloat(getComputedStyle(map).columnGap) || 48, STUB = 5, LEAD = 7;
+    const f = (n) => n.toFixed(1);
+    const bendTo = (x0, y0, x1, y1) => { const k = (x1 - x0) * 0.55; return ` C${f(x0 + k)} ${f(y0)} ${f(x1 - k)} ${f(y1)} ${f(x1)} ${f(y1)}`; };
+    const route = (sx, sy, ex, ey, lane, far) => {
+      const s = ex > sx ? 1 : -1, end = ex - s * ARROW, approach = end - s * LEAD, start = sx + s * STUB;
+      let d = `M${f(sx)} ${f(sy)} L${f(start)} ${f(sy)}`;
+      if (far) {
+        // every line bends over the same stretch of each gap, so lines keep their order through it
+        const out = sx + s * (GAP - ARROW - LEAD), into = ex - s * (GAP - STUB);
+        d += bendTo(start, sy, out, lane) + ` L${f(into)} ${f(lane)}` + bendTo(into, lane, approach, ey);
+      } else {
+        d += bendTo(start, sy, approach, ey);
       }
-      return out;
+      return d + ` L${f(end)} ${f(ey)}`;
+    };
+    // two cards in one column: out from the column's edge and back in, ending straight into the arrowhead
+    const bracket = (x, sy, ey, sign) => {
+      const end = x + sign * ARROW, approach = end + sign * LEAD, start = x + sign * STUB;
+      const bx = x + sign * (ARROW + LEAD + 10 + Math.min(30, Math.abs(ey - sy) * 0.08));
+      return `M${f(x)} ${f(sy)} L${f(start)} ${f(sy)} C${f(bx)} ${f(sy)} ${f(bx)} ${f(ey)} ${f(approach)} ${f(ey)} L${f(end)} ${f(ey)}`;
     };
     let drawn = null;
     const drawLines = (id) => {
@@ -447,25 +461,14 @@ export async function layer(view, rid, level) {
       }
       items.forEach((it) => {
         const o = it.o, oy = it.oy;
-        let y1, y2, d;
+        let d;
         if (it.side === "column") {
-          // a bracket beside the column, bowing further for cards further away, so nested brackets don't touch
           const sign = it.edge === "right" ? 1 : -1, x = it.edge === "right" ? me.right : me.left;
-          const bx = x + sign * (14 + Math.min(36, Math.abs(oy - it.py) * 0.1));
-          [y1, y2] = it.kind === "out" ? [it.py, oy] : [oy, it.py];
-          d = `M${x} ${y1} C${bx} ${y1} ${bx} ${y2} ${x} ${y2}`;
+          d = it.kind === "out" ? bracket(x, it.py, oy, sign) : bracket(x, oy, it.py, sign);
         } else {
-          // like a metro map: bend in the gap beside my card, run straight, bend again in the gap before the other card
-          const { px, qx, sgn } = it, bend = Math.min(Math.abs(qx - px), 44), k = bend * 0.55;
-          const mx = px + sgn * bend, lx = qx - sgn * bend, lane = it.first;
-          const segs = [{ c: [px + sgn * k, it.py, mx - sgn * k, lane], to: [mx, lane] }];
-          if (it.between.length) {
-            segs.push({ to: [lx, lane] });
-            segs.push({ c: [lx + sgn * k, lane, qx - sgn * k, oy], to: [qx, oy] });
-          } else if (Math.abs(qx - mx) > 0.5) {
-            segs.push({ to: [qx, oy] });
-          }
-          d = pathOf([px, it.py], segs, it.kind === "in");
+          // metro-map style: lines leave in the order of the heights they travel, so they don't cross
+          const far = it.between.length > 0, lane = it.first;
+          d = it.kind === "out" ? route(it.px, it.py, it.qx, oy, lane, far) : route(it.qx, oy, it.px, it.py, lane, far);
         }
         const p = document.createElementNS(NS, "path");
         p.setAttribute("d", d);
