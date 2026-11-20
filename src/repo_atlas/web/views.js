@@ -373,12 +373,39 @@ export async function layer(view, rid, level) {
     };
     let off = 0;
     // lines grow out of the pointed-at card: in from what calls it (sage), out to what it calls (apricot).
-    // Each line gets its own spot on the card's edge (ordered by where the other card is), so arrows never pile up.
+    // Each line gets its own spot on the card's edge, at the height of the card it leads to, so arrows never pile up.
+    // each column's x and the vertical spans its cards take up, for finding the gaps between cards
+    const cols = [...map.querySelectorAll(".layer-col")].map((ul) => {
+      const cards = [...ul.querySelectorAll(".node")].map((e) => boxIn(e, map));
+      return { x: cards.length ? cards[0].left : 0, spans: cards.map((b) => [b.top - 5, b.bottom + 5]) };
+    });
+    let lanes = [];
+    // the height nearest to y where a line passes every given column without touching a card (or another lane)
+    const freeLane = (between, y) => {
+      const ok = (v) => between.every((c) => c.spans.every(([t, b]) => v <= t || v >= b)) && lanes.every((u) => Math.abs(u - v) >= 6);
+      for (let step = 0; step < 600; step++) {
+        for (const v of step ? [y - step * 2, y + step * 2] : [y]) if (v > 2 && ok(v)) { lanes.push(v); return v; }
+      }
+      return y;
+    };
+    // a path from a start point through curve (c) and straight segments; reversed, it runs the other way
+    const pathOf = (start, segs, reverse) => {
+      const f = (n) => n.toFixed(1);
+      if (!reverse) return `M${f(start[0])} ${f(start[1])}` + segs.map((g) => g.c ? ` C${g.c.map(f).join(" ")} ${f(g.to[0])} ${f(g.to[1])}` : ` L${f(g.to[0])} ${f(g.to[1])}`).join("");
+      const pts = [start, ...segs.map((g) => g.to)];
+      let out = `M${f(pts[pts.length - 1][0])} ${f(pts[pts.length - 1][1])}`;
+      for (let i = segs.length - 1; i >= 0; i--) {
+        const g = segs[i], to = pts[i];
+        out += g.c ? ` C${f(g.c[2])} ${f(g.c[3])} ${f(g.c[0])} ${f(g.c[1])} ${f(to[0])} ${f(to[1])}` : ` L${f(to[0])} ${f(to[1])}`;
+      }
+      return out;
+    };
     let drawn = null;
     const drawLines = (id) => {
       if (drawn === id) return;
       drawn = id;
       lines.replaceChildren();
+      lanes = [];
       if (!id || !els[id]) return;
       const me = boxIn(els[id], map), inSet = callers.get(id) || new Set();
       const items = [];
@@ -388,24 +415,57 @@ export async function layer(view, rid, level) {
         it.o = boxIn(els[it.k], map);
         it.side = it.o.left >= me.right - 1 ? "right" : it.o.right <= me.left + 1 ? "left" : "column";
       });
-      // ports on my card: the left edge for cards to the left, the right edge for the rest (to the right, or in my column)
+      // Which edge of my card each line uses: its own side for cards to the left or right; links within my column
+      // take whichever edge has fewer lines, so they don't tangle with the lines heading across.
+      const across = { left: items.filter((it) => it.side === "left").length, right: items.filter((it) => it.side === "right").length };
+      const bracketEdge = across.left < across.right ? "left" : "right";
+      items.forEach((it) => {
+        it.edge = it.side === "column" ? bracketEdge : it.side;
+        it.oy = it.o.top + it.o.height / 2;
+        if (it.side === "column") return;
+        it.px = it.edge === "right" ? me.right : me.left;
+        it.qx = it.edge === "right" ? it.o.left : it.o.right;
+        it.sgn = it.qx > it.px ? 1 : -1;
+        it.between = cols.filter((c) => it.sgn > 0 ? c.x > it.px + 1 && c.x < it.qx - 1 : c.x < it.px - 1 && c.x > it.qx + 1);
+      });
+      // A line that crosses other columns travels through the gaps between their cards, on the free height nearest
+      // its card. Nearer cards pick first, so they keep the inner lanes and the lines to farther cards go around them.
+      items.filter((it) => it.between && it.between.length).sort((x, y) => Math.abs(x.qx - x.px) - Math.abs(y.qx - y.px))
+        .forEach((it) => { it.lane = freeLane(it.between, it.oy); });
+      items.forEach((it) => { it.first = it.lane ?? it.oy; });
+      // Each line leaves at the height it travels at (top of my card for lines going up, bottom for lines going
+      // down, level for lines going straight), in that order, with a little room between lines.
       for (const edge of ["left", "right"]) {
-        const at = items.filter((it) => (edge === "left") === (it.side === "left")).sort((a, b) => a.o.top - b.o.top);
-        at.forEach((it, i) => { it.py = me.top + me.height * (i + 1) / (at.length + 1); });
+        const at = items.filter((it) => it.edge === edge).sort((x, y) => x.first - y.first || x.oy - y.oy);
+        const lo = me.top + 9, hi = me.bottom - 9, n = at.length;
+        const gap = n > 1 ? Math.min(12, (hi - lo) / (n - 1)) : 0;
+        at.forEach((it, i) => {
+          it.py = Math.min(hi, Math.max(lo, it.first));
+          if (i) it.py = Math.max(it.py, at[i - 1].py + gap);
+        });
+        for (let i = n - 1; i >= 0; i--) at[i].py = Math.min(at[i].py, i === n - 1 ? hi : at[i + 1].py - gap);
       }
       items.forEach((it) => {
-        const o = it.o, oy = o.top + o.height / 2;
-        let x1, y1, x2, y2, d;
+        const o = it.o, oy = it.oy;
+        let y1, y2, d;
         if (it.side === "column") {
-          // a bracket beside the column, bowing further for cards further away
-          const x = me.right, bx = x + 16 + Math.min(34, Math.abs(oy - it.py) * 0.12);
+          // a bracket beside the column, bowing further for cards further away, so nested brackets don't touch
+          const sign = it.edge === "right" ? 1 : -1, x = it.edge === "right" ? me.right : me.left;
+          const bx = x + sign * (14 + Math.min(36, Math.abs(oy - it.py) * 0.1));
           [y1, y2] = it.kind === "out" ? [it.py, oy] : [oy, it.py];
           d = `M${x} ${y1} C${bx} ${y1} ${bx} ${y2} ${x} ${y2}`;
         } else {
-          const mine = it.side === "right" ? me.right : me.left, theirs = it.side === "right" ? o.left : o.right;
-          [x1, y1, x2, y2] = it.kind === "out" ? [mine, it.py, theirs, oy] : [theirs, oy, mine, it.py];
-          const dir = x2 > x1 ? 1 : -1, dx = Math.max(22, Math.abs(x2 - x1) * 0.45) * dir;
-          d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+          // like a metro map: bend in the gap beside my card, run straight, bend again in the gap before the other card
+          const { px, qx, sgn } = it, bend = Math.min(Math.abs(qx - px), 44), k = bend * 0.55;
+          const mx = px + sgn * bend, lx = qx - sgn * bend, lane = it.first;
+          const segs = [{ c: [px + sgn * k, it.py, mx - sgn * k, lane], to: [mx, lane] }];
+          if (it.between.length) {
+            segs.push({ to: [lx, lane] });
+            segs.push({ c: [lx + sgn * k, lane, qx - sgn * k, oy], to: [qx, oy] });
+          } else if (Math.abs(qx - mx) > 0.5) {
+            segs.push({ to: [qx, oy] });
+          }
+          d = pathOf([px, it.py], segs, it.kind === "in");
         }
         const p = document.createElementNS(NS, "path");
         p.setAttribute("d", d);
