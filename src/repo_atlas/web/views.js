@@ -1,9 +1,8 @@
 // The canvases: home, the stack of layers, one layer laid flat, and the mind map.
-import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, skeleton, problem, fill, soft, getNode, curve, boxIn } from "./lib.js";
+import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, skeleton, problem, fill, soft, getNode, boxIn } from "./lib.js";
 import { mindMap, PAGE } from "./tree.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const ZERO = { left: 0, top: 0 };
 let poll = null, pickTimer = null, handoff = null, cleanup = [];
 
 export function leave() {
@@ -308,14 +307,13 @@ export async function layer(view, rid, level) {
     const shown = data.nodes.filter((n) => active.has(n.role));
     const ranks = [...new Set(shown.map((n) => n.rank))].sort((a, b) => a - b);
     const map = h("div", { class: "layer-map" + (level <= 1 ? " is-code" : "") });
-    // the lines of one card at a time, drawn under the cards so they never cross a name
+    // the lines of one card at a time: over the cards that stepped back, under the ones they connect
     const svg = document.createElementNS(NS, "svg");
     svg.setAttribute("class", "wires");
     svg.setAttribute("aria-hidden", "true");
-    svg.innerHTML = '<defs>'
-      + '<marker id="arw-in" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1.5 1.5 8.5 5 1.5 8.5" fill="none" stroke="#557A4A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>'
-      + '<marker id="arw-out" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1.5 1.5 8.5 5 1.5 8.5" fill="none" stroke="#D97A45" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></marker>'
-      + '</defs>';
+    // filled arrowheads whose tip is the very end of the line (refX = tip), sized in pixels, not by line width
+    const head = (id, color) => `<marker id="${id}" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0 1 10 5 0 9z" fill="${color}"/></marker>`;
+    svg.innerHTML = `<defs>${head("arw-in", "#557A4A")}${head("arw-out", "#D97A45")}</defs>`;
     const lines = document.createElementNS(NS, "g");
     svg.append(lines);
     map.append(svg);
@@ -374,39 +372,55 @@ export async function layer(view, rid, level) {
         !callers.get(id) && !callees.get(id) ? h("p", { class: "pane-note" }, "Nothing on this layer calls it or is called by it.") : null);
     };
     let off = 0;
-    // lines grow out of the pointed-at card: in from what calls it (sage), out to what it calls (apricot)
-    const wire = (from, to, kind) => {
-      if (!els[from] || !els[to]) return;
-      const p = document.createElementNS(NS, "path");
-      const a = boxIn(els[from], map), b = boxIn(els[to], map);
-      // two cards in one column: a bracket out to the right of the column, not a line hidden behind the cards between
-      if (Math.abs(a.left - b.left) < 4) {
-        const x = a.right, y1 = a.top + a.height / 2, y2 = b.top + b.height / 2, bx = x + 30;
-        p.setAttribute("d", `M${x} ${y1} C${bx} ${y1} ${bx} ${y2} ${x + 4} ${y2}`);
-      } else {
-        p.setAttribute("d", curve(a, b, ZERO, "flow"));
-      }
-      p.setAttribute("class", kind === "in" ? "w-in" : "w-out");
-      p.setAttribute("marker-end", `url(#arw-${kind})`);
-      lines.append(p);
-      if (!reduced()) {
-        const len = p.getTotalLength();
-        p.animate([{ strokeDasharray: `${len} ${len}`, strokeDashoffset: kind === "in" ? -len : len }, { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 }],
-          { duration: 260, easing: "cubic-bezier(.23,1,.32,1)" });
-      }
-    };
+    // lines grow out of the pointed-at card: in from what calls it (sage), out to what it calls (apricot).
+    // Each line gets its own spot on the card's edge (ordered by where the other card is), so arrows never pile up.
     let drawn = null;
     const drawLines = (id) => {
       if (drawn === id) return;
       drawn = id;
       lines.replaceChildren();
-      if (!id) return;
-      (callers.get(id) || []).forEach((src) => wire(src, id, "in"));
-      (callees.get(id) || []).forEach((dst) => { if (!(callers.get(id) || new Set()).has(dst)) wire(id, dst, "out"); });
+      if (!id || !els[id]) return;
+      const me = boxIn(els[id], map), inSet = callers.get(id) || new Set();
+      const items = [];
+      inSet.forEach((k) => { if (els[k]) items.push({ k, kind: "in" }); });
+      (callees.get(id) || []).forEach((k) => { if (els[k] && !inSet.has(k)) items.push({ k, kind: "out" }); });
+      items.forEach((it) => {
+        it.o = boxIn(els[it.k], map);
+        it.side = it.o.left >= me.right - 1 ? "right" : it.o.right <= me.left + 1 ? "left" : "column";
+      });
+      // ports on my card: the left edge for cards to the left, the right edge for the rest (to the right, or in my column)
+      for (const edge of ["left", "right"]) {
+        const at = items.filter((it) => (edge === "left") === (it.side === "left")).sort((a, b) => a.o.top - b.o.top);
+        at.forEach((it, i) => { it.py = me.top + me.height * (i + 1) / (at.length + 1); });
+      }
+      items.forEach((it) => {
+        const o = it.o, oy = o.top + o.height / 2;
+        let x1, y1, x2, y2, d;
+        if (it.side === "column") {
+          // a bracket beside the column, bowing further for cards further away
+          const x = me.right, bx = x + 16 + Math.min(34, Math.abs(oy - it.py) * 0.12);
+          [y1, y2] = it.kind === "out" ? [it.py, oy] : [oy, it.py];
+          d = `M${x} ${y1} C${bx} ${y1} ${bx} ${y2} ${x} ${y2}`;
+        } else {
+          const mine = it.side === "right" ? me.right : me.left, theirs = it.side === "right" ? o.left : o.right;
+          [x1, y1, x2, y2] = it.kind === "out" ? [mine, it.py, theirs, oy] : [theirs, oy, mine, it.py];
+          const dir = x2 > x1 ? 1 : -1, dx = Math.max(22, Math.abs(x2 - x1) * 0.45) * dir;
+          d = `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`;
+        }
+        const p = document.createElementNS(NS, "path");
+        p.setAttribute("d", d);
+        p.setAttribute("class", it.kind === "in" ? "w-in" : "w-out");
+        p.setAttribute("marker-end", `url(#arw-${it.kind})`);
+        lines.append(p);
+        if (reduced()) return;
+        // the line draws itself from the caller's end toward the arrowhead
+        const len = p.getTotalLength();
+        p.animate([{ strokeDasharray: `${len} ${len}`, strokeDashoffset: len }, { strokeDasharray: `${len} ${len}`, strokeDashoffset: 0 }],
+          { duration: 240, easing: "cubic-bezier(.23,1,.32,1)" });
+      });
     };
     const light = (id) => {
       if (id) peek(id);
-      drawLines(id);
       map.classList.toggle("has-hot", !!id);
       const ins = (id && callers.get(id)) || new Set(), outs = (id && callees.get(id)) || new Set();
       Object.values(els).forEach((e) => {
@@ -415,8 +429,9 @@ export async function layer(view, rid, level) {
         e.classList.toggle("is-caller", isIn && !isOut);
         e.classList.toggle("is-callee", isOut && !isIn);
         e.classList.toggle("is-both", isIn && isOut);
-        e.querySelector(".node-rel").textContent = isIn && isOut ? "Calls it · called by it" : isIn ? "Calls it" : isOut ? "Called by it" : "";
+        e.querySelector(".node-rel").textContent = isIn && isOut ? "Both ways" : isIn ? "Calls it" : isOut ? "Called by it" : "";
       });
+      drawLines(id);
     };
     Object.values(els).forEach((e) => {
       const on = () => { clearTimeout(off); light(e.dataset.id); };

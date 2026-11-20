@@ -28,7 +28,12 @@ async def local_only(request: Request, call_next):
     origin = request.headers.get("origin")
     if not LOCAL_HOST.match(host) or (origin and origin != "null" and not LOCAL_ORIGIN.match(origin)):
         return JSONResponse({"detail": "forbidden"}, status_code=403)
-    return await call_next(request)
+    response = await call_next(request)
+    # The page's files come out of the installed package with old timestamps, so without this a browser may keep
+    # showing the previous version's screens after an update. "no-cache" still lets it reuse a file that hasn't changed.
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 class RepoIn(BaseModel):

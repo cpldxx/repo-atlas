@@ -198,7 +198,7 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 @keyframes laid { from { opacity: 0; } }
 .layer-map { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 200px); gap: 10px 48px; align-items: start; width: max-content; min-width: 100%; padding: 28px; }
 .layer-map.is-code { grid-auto-columns: minmax(160px, 200px); }
-.layer-col { display: grid; gap: 8px; position: relative; z-index: 1; align-content: start; }
+.layer-col { display: grid; gap: 8px; align-content: start; }
 .layer-col > li { display: grid; }
 .node { position: relative; display: grid; gap: 1px; padding: 9px 12px; border-radius: 11px; background: var(--card); border: 1px solid var(--line-2); text-decoration: none;
   transition: transform .16s cubic-bezier(.23, 1, .32, 1), border-color .15s, box-shadow .15s, opacity .15s; }
@@ -209,7 +209,8 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .node-t { font-weight: 600; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .node-s { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.4; }
 /* pointing at a card colours what calls it (sage) and what it calls (apricot); everything else steps back */
-.node-rel { font-size: 11.5px; font-weight: 700; letter-spacing: .01em; }
+/* the relation is a badge on the card's top edge, so pointing at a card never changes any card's size */
+.node-rel { position: absolute; top: -9px; right: 10px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 16px; white-space: nowrap; background: var(--card); box-shadow: 0 0 0 1px currentColor; }
 .node-rel:empty { display: none; }
 .node.is-hot { border-color: var(--ink); box-shadow: var(--shadow-up); }
 .node.is-caller { border-color: #9DBA90; background: var(--sage-wash); }
@@ -222,8 +223,11 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) { background: #FDFBF9; border-color: var(--line); color: #C4B8AE; box-shadow: none; }
 .layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) .node-s,
 .layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) .node-flag { color: #CFC4BB; background: transparent; }
-.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 0; }
-.wires path { fill: none; stroke-width: 1.8; stroke-linecap: round; }
+/* lines sit over the cards that stepped back and under the cards they connect */
+.node { z-index: 2; }
+.layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) { z-index: 0; }
+.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1; }
+.wires path.w-in, .wires path.w-out { fill: none; stroke-width: 2; stroke-linecap: round; }
 .wires .w-in { stroke: var(--sage); }
 .wires .w-out { stroke: var(--apricot-deep); }
 /* where to begin */

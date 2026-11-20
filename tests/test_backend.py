@@ -121,6 +121,8 @@ def test_api_on_a_stored_graph(built, tmp_path, monkeypatch):
     from repo_atlas.api import app
     c = TestClient(app)
     assert c.get("/api/health").json()["ok"] is True
+    page = c.get("/")   # the page's files are always checked for a newer version (old package timestamps)
+    assert page.status_code == 200 and page.headers["cache-control"] == "no-cache"
     assert [l["count"] for l in c.get("/api/repos/o__r").json()["layers"]] == [3, 4, 4, 9, 7]
     lay = c.get("/api/repos/o__r/layers/3").json()
     assert {n["id"] for n in lay["nodes"]} == {"c:app", "c:app/auth", "c:app/store", "c:tests:tests"}
