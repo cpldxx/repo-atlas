@@ -177,6 +177,23 @@ def focus(rid: str, nid: str, cap: int = 18, cross: int = 8) -> dict | None:
 BRANCHES = ("inside", "calls", "callers")
 
 
+def _name_key(n: dict) -> str:
+    return (n.get("title") or n.get("label") or "").strip().lower().rstrip("/").split("/")[-1]
+
+
+def _through(rid: str, n: dict) -> dict:
+    """Step through parts that only repeat themselves: an area whose one component has the same name, a component
+    whose one folder has the same name. Opening the outer one shows what is inside the last of them."""
+    for _ in range(4):
+        if (n.get("children") or 0) != 1:
+            break
+        kids = store.children(rid, n["id"])
+        if len(kids) != 1 or _name_key(kids[0]) != _name_key(n):
+            break
+        n = kids[0]
+    return n
+
+
 def branch(rid: str, nid: str | None, rel: str, limit: int = 12, offset: int = 0) -> dict | None:
     """One branch of the mind map: what is inside a node, what it calls, or what calls it.
 
@@ -191,7 +208,7 @@ def branch(rid: str, nid: str | None, rel: str, limit: int = 12, offset: int = 0
     weights: dict[str, int] = {}
     if rel == "inside":
         if node:
-            kids = store.children(rid, nid)
+            kids = store.children(rid, _through(rid, node)["id"])
         else:
             kids = store.nodes_at(rid, 4)
             kids.sort(key=lambda n: (ROLE_ORDER.get(n["role"], 9), -(n["deg_in"] + n["deg_out"]), n["id"]))
@@ -212,7 +229,8 @@ def branch(rid: str, nid: str | None, rel: str, limit: int = 12, offset: int = 0
     for n in page:
         c = card(n)
         callers, calls = counts.get(n["id"], (0, 0))
-        c["counts"] = {"inside": n.get("children") or 0, "calls": calls, "callers": callers}
+        inside = _through(rid, n).get("children") or 0 if rel == "inside" else n.get("children") or 0
+        c["counts"] = {"inside": inside, "calls": calls, "callers": callers}
         if n["id"] in weights:
             c["weight"] = weights[n["id"]]
         items.append(c)

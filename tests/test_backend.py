@@ -147,8 +147,14 @@ def test_api_on_a_stored_graph(built, tmp_path, monkeypatch):
     assert [i["id"] for i in calls["items"]] == ["s:check"] and calls["items"][0]["counts"] == {"inside": 0, "calls": 1, "callers": 1}
     callers = c.get("/api/repos/o__r/branch", params={"rel": "callers", "node": "s:login", "limit": 1}).json()
     assert callers["total"] == 2 and len(callers["items"]) == 1
+    # a part whose only child repeats its name is stepped through: component app/auth -> folder auth -> its files
     inside = c.get("/api/repos/o__r/branch", params={"rel": "inside", "node": "c:app/auth"}).json()
-    assert {i["id"] for i in inside["items"]} == {"m:app/auth"}
+    assert {i["id"] for i in inside["items"]} == {"f:app/auth/hash.py", "f:app/auth/routes.py", "f:app/auth/service.py", "f:app/auth/tokens.py"}
+    tests_area = next(i for i in top["items"] if i["id"] == "a:tests")
+    assert tests_area["counts"]["inside"] == 1   # tests -> tests -> tests -> test_auth.py
+    assert [i["id"] for i in c.get("/api/repos/o__r/branch", params={"rel": "inside", "node": "a:tests"}).json()["items"]] == ["f:tests/test_auth.py"]
+    store_comp = c.get("/api/repos/o__r/branch", params={"rel": "inside", "node": "a:app:app"}).json()
+    assert {i["id"] for i in store_comp["items"]} == {"c:app", "c:app/auth", "c:app/store"}   # three children: nothing to step through
     assert c.get("/api/repos/o__r/branch", params={"rel": "calls"}).status_code == 404
     assert c.get("/api/repos/o__r/branch", params={"rel": "sideways", "node": "s:login"}).status_code == 422
 

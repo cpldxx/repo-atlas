@@ -1,6 +1,6 @@
 [project]
 name = "repo-atlas"
-version = "0.1.0"
+version = "0.1.1"
 description = "Read a GitHub repository once and explore it as five layers, a mind map, and answers written from the code. Runs on your machine."
 readme = "README.md"
 requires-python = ">=3.12,<3.15"

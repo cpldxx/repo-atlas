@@ -4,13 +4,17 @@ import { applyCited } from "./views.js";
 
 const rid = () => state.route.rid;
 const enc = encodeURIComponent;
+// the item picked on the mind map, if any (otherwise the panel follows the page)
+const picked = () => (state.route.view === "focus" || state.route.view === "map") && state.sel ? state.sel : null;
+const shownNode = () => picked() || state.route.node;
 let mounted = null;   // the ask pane that is on screen right now; a streaming answer always paints into this one
 
 export function renderPanel(panel) {
   const r = state.route;
   if (r.view === "home" || r.view === "settings") { panel.hidden = true; mounted = null; fill(panel); return; }
   panel.hidden = false;
-  const whole = r.view === "stack" || r.view === "map";
+  const sel = picked();
+  const whole = (r.view === "stack" || r.view === "map") && !sel;
   const infoLabel = whole ? "First-day guide" : "Details";
   const tabs = [["info", infoLabel], ["ask", "Ask"]];
   const panes = {};
@@ -38,7 +42,7 @@ export function renderPanel(panel) {
   fill(panel, tablist, panes.info, panes.ask);
   if (whole) tour(panes.info);
   else if (r.view === "layer") layerInfo(panes.info, r.level);
-  else nodeInfo(panes.info, r.node);
+  else nodeInfo(panes.info, sel || r.node);
   ask(panes.ask, () => select("ask"));
 }
 
@@ -80,8 +84,10 @@ function layerInfo(pane, level) {
   const counts = state.repo.layers;
   fill(pane,
     h("h2", {}, `L${level} ${LV[level].name}`),
-    h("p", { class: "pane-lead" }, `${LV[level].hint}. Arrows combine real calls and uses; thicker means more connections.`),
+    h("p", { class: "pane-lead" }, `${LV[level].hint}. Point at a card to see what calls it and what it calls, from real calls and uses in the code. Click a card for its mind map.`),
     honesty(level),
+    h("div", { id: "layer-peek", class: "peek", "aria-live": "polite" },
+      h("p", { class: "pane-note" }, "Point at a card and what it's connected to is listed here.")),
     h("h3", {}, "Other layers"),
     h("ul", { class: "rows" }, counts.filter((l) => l.level !== level).map((l) => h("li", {},
       h("a", { class: "row-link", href: link.layer(rid(), l.level) },
@@ -98,7 +104,7 @@ async function nodeInfo(pane, id) {
     fill(pane, problem(missing ? "This item wasn't found." : err.message, missing ? null : () => nodeInfo(pane, id)));
     return;
   }
-  if (state.route.node !== id) return;
+  if (shownNode() !== id) return;
   const summary = h("p", { class: "summary", html: tick(d.summary || d.doc || "") });
   // The API returns the eight strongest connections; say so instead of letting 8 read as the total.
   const rel = (title, items) => items.length ? [h("h3", {}, `${title} `, h("span", { class: "count" }, items.length >= 8 ? `top ${items.length}` : num(items.length))),
@@ -112,7 +118,9 @@ async function nodeInfo(pane, id) {
     d.path ? h("p", { class: "path mono" }, soft(d.path + (d.line ? `:${d.line}` : ""))) : null,
     summary,
     honesty(d.level),
-    d.url ? h("p", {}, h("a", { class: "btn", href: d.url, target: "_blank", rel: "noopener", html: `<span>View on GitHub</span>${icon("out")}` })) : null,
+    h("p", { class: "pane-acts" },
+      id !== state.route.node ? h("a", { class: "btn primary", href: link.node(rid(), id), html: `${icon("tree")}<span>Open as its own map</span>` }) : null,
+      d.url ? h("a", { class: "btn", href: d.url, target: "_blank", rel: "noopener", html: `<span>View on GitHub</span>${icon("out")}` }) : null),
     d.kind === "external" && d.meta.top ? [h("h3", {}, "Most used packages"),
       h("ul", { class: "rows" }, d.meta.top.slice(0, 10).map((t) => h("li", {}, h("span", { class: "row-link is-static" },
         h("span", { class: "row-t mono" }, soft(t.name)), h("span", { class: "row-s" }, `×${num(t.uses)}`)))))] : null,
@@ -127,7 +135,7 @@ async function nodeInfo(pane, id) {
     fill(summary, skeleton(2));
     try {
       const ex = await api(`/repos/${enc(rid())}/explain` + q({ node: id }), { method: "POST" });
-      if (state.route.node === id) summary.innerHTML = tick(ex.summary || d.doc || "");
+      if (shownNode() === id) summary.innerHTML = tick(ex.summary || d.doc || "");
     } catch {
       summary.innerHTML = tick(d.doc || "");
     }
@@ -220,15 +228,17 @@ async function run(repoId, t, body) {
 function ask(pane, reveal) {
   const r = state.route;
   const chat = (state.chats[r.rid] ||= []);
-  const scope = r.view === "focus" ? { node: r.node } : r.view === "layer" ? { level: r.level } : {};
-  const scopeLabel = () => r.view === "focus" ? (state.nodeName || "selected item")
+  const sel = picked();
+  const target = sel || (r.view === "focus" ? r.node : null);
+  const scope = target ? { node: target } : r.view === "layer" ? { level: r.level } : {};
+  const scopeLabel = () => sel ? (state.selName || "selected item") : r.view === "focus" ? (state.nodeName || "selected item")
     : r.view === "layer" ? `L${r.level} ${LV[r.level].name} layer` : "whole repository";
   const log = h("div", { class: "chat", "aria-live": "polite" });
   const input = h("textarea", { id: "ask-q", rows: "2", maxlength: "2000", placeholder: "e.g. Where is this called from?", "aria-describedby": "ask-scope" });
   const send = h("button", { class: "btn primary", type: "submit", "aria-label": "Send question", html: icon("send") });
   const scopeEl = h("p", { class: "ask-scope", id: "ask-scope" });
   const setScope = () => fill(scopeEl, "About: ", h("b", {}, scopeLabel()));
-  const ideas = r.view === "focus" ? ["What does this do?", "Where is it called, and what does it call?", "Where should I start reading?"]
+  const ideas = target ? ["What does this do?", "Where is it called, and what does it call?", "Where should I start reading?"]
     : r.view === "layer" ? ["What should I look at first in this layer?", "What is most tangled together here?"]
       : ["What does this repository do?", "Where should I start reading?"];
   const busy = () => chat.some((t) => !t.done);

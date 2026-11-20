@@ -1,26 +1,31 @@
 // The mind map: a tree that grows to the right one branch at a time, like NotebookLM's.
-// Each item opens with its arrow button; clicking its name makes it the new centre.
+// Clicking an item grows its branch right there and shows the item in the side panel. The map shrinks to fit the
+// width of the screen (down to a readable size), so there is no dragging around to see what just opened.
 import { h, api, q, link, num, nameOf, soft, icon, reduced, fill, LV } from "./lib.js";
 
 const NS = "http://www.w3.org/2000/svg";
 export const PAGE = 8;
-const GX = 72;          // gap between a parent and its children
-const PAD = 40;
+const GX = 60;          // gap between a parent and its children
+const PAD = 28;
+const MIN_SCALE = 0.72; // never smaller than this: below it, text gets too small to read
 export const REL = { inside: "Inside", calls: "Calls", callers: "Called by" };
 const ease = (k) => 1 - Math.pow(1 - k, 3);
 
 // scroll: the scrolling box to draw in.
 // root: { node: card|null, label, sub }; branches: [{ rel, total, items }] shown under the root.
-// flat: true puts the branch items straight under the root (the whole-repo map), without a "Inside" group node.
-export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false }) {
+// flat: put the branch items straight under the root (the whole-repo map), without an "Inside" group node.
+// onSelect(card|null): an item was picked (null: the centre).
+export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false, onSelect = () => {} }) {
+  const sizer = h("div", { class: "mm-sizer" });
   const canvas = h("div", { class: "mm-canvas" });
   const svg = document.createElementNS(NS, "svg");
   svg.setAttribute("class", "mm-wires");
   svg.setAttribute("aria-hidden", "true");
   canvas.append(svg);
-  fill(scroll, canvas);
+  sizer.append(canvas);
+  fill(scroll, sizer);
 
-  let uid = 0, raf = 0, firstRun = true;
+  let uid = 0, raf = 0, firstRun = true, scale = 1, size0 = { w: 0, h: 0 }, picked = null;
   const wires = new Map();          // tree node -> its path in from the parent
   const leaving = new Set();
   const make = (kind, props) => ({ key: ++uid, kind, kids: null, open: false, total: 0, ...props });
@@ -56,19 +61,19 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
     T.kids = [...(T.kids || []).filter((k) => k.kind !== "more"), ...d.items.map((i) => item(i, T.rel, T))];
     withMore(T);
   }
+  const canOpen = (T) => T.kind === "group" || (T.kind === "item" && T.total > 0 && !T.loop);
   function busy(T, on) {
-    const b = T.kind === "item" ? T.el && T.el.querySelector(".mm-open") : T.el;
-    if (!b) return;
-    b.toggleAttribute("aria-busy", on);
-    b.classList.toggle("is-busy", on);
+    if (!T.el) return;
+    T.el.toggleAttribute("aria-busy", on);
+    T.el.classList.toggle("is-busy", on);
   }
   async function toggle(T) {
-    if (T.loading) return;
+    if (T.loading || !canOpen(T)) return;
     if (T.open) { T.open = false; sync(T); layout(T); return; }
     if (!T.kids) {
       T.loading = true;
       busy(T, true);
-      try { await load(T); } catch (err) { T.loading = false; busy(T, false); fail(T, err); return; }
+      try { await load(T); } catch (err) { T.loading = false; busy(T, false); T.el.classList.add("is-error"); T.el.title = err.message; return; }
       T.loading = false;
       busy(T, false);
     }
@@ -76,42 +81,40 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
     sync(T);
     layout(T, true);
   }
+  function pick(T) {
+    if (picked && picked.el) picked.el.classList.remove("is-picked");
+    picked = T;
+    if (T.el) T.el.classList.add("is-picked");
+    onSelect(T.kind === "root" ? null : T.data);
+  }
   async function more(M) {
     const P = M.parent;
     if (M.loading) return;
     M.loading = true;
     M.el.classList.add("is-busy");
     M.el.textContent = "Loading…";
-    try { await load(P); } catch (err) { M.loading = false; M.el.classList.remove("is-busy"); M.el.textContent = "Couldn't load. Try again"; return; }
-    const at = M.el;
+    try { await load(P); } catch { M.loading = false; M.el.classList.remove("is-busy"); M.el.textContent = "Couldn't load. Try again"; return; }
     layout(P, true);
-    // keep the keyboard where it was: on the first of the newly shown items
-    if (document.activeElement === at || !document.activeElement || document.activeElement === document.body) {
-      const fresh = P.kids.find((k) => k.el && k.el.isConnected && !k.seen);
-      if (fresh) (fresh.el.querySelector("a, button") || fresh.el).focus({ preventScroll: true });
-    }
-  }
-  function fail(T, err) {
-    const b = T.kind === "item" ? T.el.querySelector(".mm-open") : T.el;
-    if (b) { b.classList.add("is-error"); b.title = err.message; }
+    const fresh = P.kids.find((k) => k.el && k.el.isConnected && !k.seen);
+    if (fresh && (!document.activeElement || document.activeElement === document.body)) fresh.el.focus({ preventScroll: true });
   }
 
   // ---- elements
   const chev = () => h("span", { class: "mm-chev", html: icon("chev", 14) });
   function sync(T) {
-    const b = T.kind === "item" ? T.el && T.el.querySelector(".mm-open") : T.kind === "group" ? T.el : null;
-    if (!b) return;
-    b.setAttribute("aria-expanded", String(T.open));
-    b.classList.toggle("is-open", T.open);
+    if (!T.el || !canOpen(T)) return;
+    T.el.setAttribute("aria-expanded", String(T.open));
+    T.el.classList.toggle("is-open", T.open);
   }
   function element(T) {
     if (T.el) return T.el;
     let e;
     if (T.kind === "root") {
-      const lv = T.data ? T.data.level : null;
-      e = h("div", { class: "mm-node is-root", dataset: T.data ? { id: T.data.id } : {} },
-        h("span", { class: "mm-t" + (lv != null && lv <= 1 ? " mono" : "") }, lv != null && lv <= 1 ? soft(T.label) : T.label),
+      const lv = T.data ? T.data.level : null, code = lv != null && lv <= 1;
+      e = h("button", { class: "mm-node is-root is-picked", type: "button", dataset: T.data ? { id: T.data.id } : {}, onclick: () => pick(T) },
+        h("span", { class: "mm-t" + (code ? " mono" : "") }, code ? soft(T.label) : T.label),
         T.sub ? h("span", { class: "mm-sub" }, T.sub) : null);
+      picked = T;
     } else if (T.kind === "group") {
       e = h("button", { class: `mm-node is-group rel-${T.rel}`, type: "button", "aria-expanded": String(T.open), onclick: () => toggle(T) },
         h("span", { class: "mm-t" }, REL[T.rel]), h("span", { class: "mm-count" }, num(T.total)), chev());
@@ -119,19 +122,23 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
       e = h("button", { class: "mm-node is-more", type: "button", onclick: () => more(T) },
         T.rest <= PAGE ? `Show ${num(T.rest)} more` : `Show ${PAGE} more · ${num(T.rest)} left`);
     } else {
-      const d = T.data, code = d.level <= 1;
-      const opener = T.total > 0 && !T.loop
-        ? h("button", { class: "mm-open", type: "button", "aria-expanded": String(T.open),
-          "aria-label": `${REL[T.rel]}: ${num(T.total)}, under ${nameOf(d)}`, title: `${REL[T.rel]} · ${num(T.total)}`, onclick: () => toggle(T) },
-          h("span", { class: "mm-count" }, num(T.total)), chev())
-        : null;
-      e = h("div", { class: "mm-node is-item" + (T.loop ? " is-loop" : ""), dataset: { id: d.id }, style: { "--tint": `var(--l${d.level})` } },
-        h("a", { class: "mm-t" + (code ? " mono" : ""), href: link.node(rid, d.id),
-          title: [`L${d.level} ${LV[d.level].name}`, d.path].filter(Boolean).join(" · ") + (T.loop ? " · already on this branch" : "") },
-          h("i", { class: "mm-dot", "aria-hidden": "true" }), h("span", {}, code ? soft(nameOf(d)) : nameOf(d))),
-        opener);
+      const d = T.data, code = d.level <= 1, open = canOpen(T);
+      const what = [`L${d.level} ${LV[d.level].name}`, d.path].filter(Boolean).join(" · ");
+      e = h("button", { class: "mm-node is-item" + (T.loop ? " is-loop" : ""), type: "button", dataset: { id: d.id }, style: { "--tint": `var(--l${d.level})` },
+        title: what + (T.loop ? " · already on this branch" : open ? ` · ${REL[T.rel]}: ${num(T.total)}` : ""),
+        "aria-expanded": open ? String(T.open) : null,
+        "aria-label": `${nameOf(d)}${open ? `, ${REL[T.rel].toLowerCase()} ${num(T.total)}` : ""}`,
+        onclick: (ev) => {
+          if (ev.metaKey || ev.ctrlKey) { window.open(link.node(rid, d.id), "_blank"); return; }
+          pick(T);
+          toggle(T);
+        } },
+        h("i", { class: "mm-dot", "aria-hidden": "true" }),
+        h("span", { class: "mm-t" + (code ? " mono" : "") }, code ? soft(nameOf(d)) : nameOf(d)),
+        open ? h("span", { class: "mm-open", "aria-hidden": "true" }, h("span", { class: "mm-count" }, num(T.total)), chev()) : null);
     }
     T.el = e;
+    if (T.kind === "item" && T.open) e.classList.add("is-open");
     e.addEventListener("mouseenter", () => hot(T, true));
     e.addEventListener("mouseleave", () => hot(T, false));
     return e;
@@ -182,60 +189,89 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
     const list = shown(root);
     const live = new Set(list);
     for (const T of [...wires.keys()]) if (!live.has(T) && T.el && !leaving.has(T)) goAway(T);
+    for (const T of list) if (leaving.has(T)) { leaving.delete(T); T.el.classList.remove("is-leaving"); T.el.inert = false; }
     list.forEach(element);
     order(list);
     list.forEach((T) => { T.w = T.el.offsetWidth; T.h = T.el.offsetHeight; });
     size(root);
     place(root, PAD, 0);
+    const vw = scroll.clientWidth, vh = scroll.clientHeight;
     const W = Math.max(...list.map((T) => T.x + T.w)) + PAD;
-    const H = Math.max(root.sh + 2 * PAD, scroll.clientHeight - 2);
+    // as wide as it needs, as small as it has to be to fit (but still readable)
+    const s1 = Math.max(MIN_SCALE, Math.min(1, (vw - 2) / W));
+    const H = Math.max(root.sh + 2 * PAD, (vh - 2) / s1);
     const oy = Math.max(PAD, (H - root.sh) / 2);
     list.forEach((T) => { T.to = { x: T.x, y: T.y + oy, o: 1 }; });
 
-    // keep the thing you clicked where it is: move the view by as much as the tree moved under it
-    const oldH = canvas.offsetHeight;
-    canvas.style.width = `${Math.max(W, canvas.offsetWidth)}px`;
-    canvas.style.height = `${Math.max(H, oldH)}px`;
-    if (anchor && anchor.cur) {
-      const before = scroll.scrollTop;
-      scroll.scrollTop = before + (anchor.to.y - anchor.cur.y);
-      const moved = scroll.scrollTop - before;
-      if (moved) [...wires.keys(), root].forEach((T) => { if (T.cur) T.cur.y += moved; });
-    }
+    // where the clicked item is on screen now: it stays there while the map changes around it
+    const pin = anchor && anchor.cur ? anchor.cur.y * scale - scroll.scrollTop : null;
     list.forEach((T) => {
       if (T.cur) return;
       T.seen = false;
       const p = T.parent && T.parent.cur;
-      T.cur = p && !firstRun
-        ? { x: p.x + T.parent.w + GX * 0.35, y: p.y + T.parent.h / 2 - T.h / 2, o: 0 }
-        : firstRun && p ? { x: p.x + T.parent.w, y: p.y + T.parent.h / 2 - T.h / 2, o: 0 } : { ...T.to, o: T === root ? 1 : 0 };
+      T.cur = p ? { x: p.x + T.parent.w + (firstRun ? 0 : GX * 0.35), y: p.y + T.parent.h / 2 - T.h / 2, o: 0 } : { ...T.to, o: T === root ? 1 : 0 };
     });
     list.forEach((T) => { if (T !== root && !wires.has(T)) wires.set(T, svg.appendChild(document.createElementNS(NS, "path"))); });
-    tween(list, () => {
+
+    // sideways: everything fits, or (at the smallest size) keep the opened item and its new branch in view
+    let x1 = 0;
+    if (W * s1 > vw) {
+      if (anchor && reveal) {
+        const kids = anchor.kids || [];
+        const right = Math.max(anchor.to.x + anchor.w, ...kids.map((k) => k.to.x + k.w)) * s1 + 20;
+        x1 = Math.max(0, Math.min(right - vw, anchor.to.x * s1 - 20));
+      } else {
+        x1 = Math.min(scroll.scrollLeft, W * s1 - vw);
+      }
+    }
+    const s0 = firstRun ? s1 : scale, x0 = scroll.scrollLeft;
+    const wMax = Math.max(size0.w, W), hMax = Math.max(size0.h, H);
+    const frame = (e) => {
+      scale = s0 + (s1 - s0) * e;
+      canvas.style.transform = `scale(${scale.toFixed(4)})`;
+      canvas.style.width = `${wMax}px`;
+      canvas.style.height = `${hMax}px`;
+      sizer.style.width = `${(wMax * scale).toFixed(1)}px`;
+      sizer.style.height = `${(hMax * scale).toFixed(1)}px`;
+      if (!firstRun) scroll.scrollLeft = x0 + (x1 - x0) * e;
+      if (pin != null) scroll.scrollTop = anchor.cur.y * scale - pin;
+    };
+    if (firstRun) {
+      frame(0);
+      scroll.scrollTop = (root.to.y + root.h / 2) * scale - vh / 2;
+      scroll.scrollLeft = 0;
+      firstRun = false;
+    }
+    tween(list, frame, () => {
+      size0 = { w: W, h: H };
       canvas.style.width = `${W}px`;
       canvas.style.height = `${H}px`;
+      sizer.style.width = `${(W * s1).toFixed(1)}px`;
+      sizer.style.height = `${(H * s1).toFixed(1)}px`;
+      if (pin != null) scroll.scrollTop = anchor.cur.y * s1 - pin;
       list.forEach((T) => { T.seen = true; });
+      // the branch that just grew: scroll just enough to bring all of it into view, never losing the item that opened it
+      if (anchor && reveal && anchor.open && anchor.kids && anchor.kids.length) {
+        const ks = anchor.kids.filter((k) => k.to);
+        const top = Math.min(anchor.to.y, ...ks.map((k) => k.to.y)) * s1 - 12;
+        const bottom = Math.max(anchor.to.y + anchor.h, ...ks.map((k) => k.to.y + k.h)) * s1 + 12;
+        const vt = scroll.scrollTop;
+        let want = vt;
+        if (bottom - top <= vh) want = top < vt ? top : bottom > vt + vh ? bottom - vh : vt;
+        else want = Math.min(top, anchor.to.y * s1 - 12);
+        if (Math.abs(want - vt) > 2) scroll.scrollTo({ top: want, behavior: reduced() ? "auto" : "smooth" });
+      }
     });
-    if (firstRun) {
-      firstRun = false;
-      scroll.scrollTop = root.to.y + root.h / 2 - scroll.clientHeight / 2;
-      // on a narrow screen, start with the first branches in view rather than the centre's empty left side
-      scroll.scrollLeft = Math.max(0, root.to.x + root.w + GX - scroll.clientWidth * 0.42);
-    } else if (reveal && anchor) {
-      // bring the new branch into view, without losing the item that opened it
-      const kids = anchor.kids || [];
-      const right = Math.max(anchor.to.x + anchor.w, ...kids.map((k) => k.to.x + k.w)) + 24;
-      const want = Math.min(right - scroll.clientWidth, anchor.to.x - 24);
-      if (want > scroll.scrollLeft) scroll.scrollTo({ left: want, behavior: reduced() ? "auto" : "smooth" });
-    }
   }
   function goAway(T) {
     leaving.add(T);
     T.el.classList.add("is-leaving");
     T.el.inert = true;
     let p = T.parent;
-    while (p && p.parent && !(p.open && shown(root).includes(p))) p = p.parent;
+    const now = shown(root);
+    while (p && p.parent && !now.includes(p)) p = p.parent;
     T.away = p && p.cur ? { x: p.cur.x + p.w * 0.6, y: p.cur.y + p.h / 2 - T.h / 2, o: 0 } : { ...T.cur, o: 0 };
+    if (picked === T) pick(root);
   }
 
   function draw(T) {
@@ -250,9 +286,9 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
     p.setAttribute("d", `M${x1.toFixed(1)} ${y1.toFixed(1)} C${(x1 + dx).toFixed(1)} ${y1.toFixed(1)} ${(x2 - dx).toFixed(1)} ${y2.toFixed(1)} ${x2.toFixed(1)} ${y2.toFixed(1)}`);
     p.style.opacity = T.cur.o >= 0.999 ? "" : T.cur.o.toFixed(3);
   }
-  function tween(list, done) {
+  function tween(list, frame, done) {
     cancelAnimationFrame(raf);
-    const D = reduced() ? 0 : 340;
+    const D = reduced() ? 0 : 360;
     const from = new Map([...list, ...leaving].map((T) => [T, { ...T.cur }]));
     const t0 = performance.now();
     const step = (now) => {
@@ -263,6 +299,7 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
         if (T.el) draw(T);
       }
       for (const T of from.keys()) wire(T);
+      frame(e);
       if (k < 1) { raf = requestAnimationFrame(step); return; }
       for (const T of leaving) {
         T.el.remove();
@@ -296,16 +333,21 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false })
   scroll.addEventListener("pointercancel", drop);
 
   layout();
-  let first = true;
-  const ro = new ResizeObserver(() => { if (first) { first = false; return; } layout(); });
+  let first = true, lastW = scroll.clientWidth;
+  const ro = new ResizeObserver(() => {
+    if (first) { first = false; return; }
+    if (scroll.clientWidth === lastW) return;
+    lastW = scroll.clientWidth;
+    layout();
+  });
   ro.observe(scroll);
   return {
     root,
     stop() { cancelAnimationFrame(raf); ro.disconnect(); },
-    collapseAll() {
-      const shut = (T) => { if (T.kids) T.kids.forEach(shut); if (T.kind === "item" && T.open) { T.open = false; sync(T); } };
-      shut(root);
-      layout();
+    select(id) {
+      const find = (T) => (T.data && T.data.id === id && T.el ? T : (T.open && T.kids || []).map(find).find(Boolean));
+      const T = id ? find(root) : root;
+      if (T) pick(T);
     },
   };
 }

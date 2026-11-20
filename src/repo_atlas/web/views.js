@@ -1,9 +1,7 @@
 // The canvases: home, the stack of layers, one layer laid flat, and the mind map.
-import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, skeleton, problem, curve, fill, soft, boxIn, getNode } from "./lib.js";
+import { state, LV, ROLE, STAGES, num, nameOf, icon, h, api, q, link, reduced, skeleton, problem, fill, soft, getNode } from "./lib.js";
 import { mindMap, PAGE } from "./tree.js";
 
-const NS = "http://www.w3.org/2000/svg";
-const ZERO = { left: 0, top: 0 };
 let poll = null, pickTimer = null, handoff = null, cleanup = [];
 
 export function leave() {
@@ -246,16 +244,17 @@ export async function stack(view, rid) {
 }
 
 // ---------------------------------------------------------------- one layer, flat
-// Cards stand in columns, callers on the left and what they call on the right. Arrows stay out of the way until you
-// point at a card (its own arrows), or turn them all on.
+// Cards stand in columns, callers on the left and what they call on the right. No lines: pointing at a card colours
+// what calls it and what it calls. The most connected cards are marked as the place to start.
 export async function layer(view, rid, level) {
-  const PAGE_L = 90, MAX_WIRES = 120;
-  let limit = PAGE_L, data = null, active = null, firstDraw = true, every = false;
+  const PAGE_L = 90;
+  let limit = PAGE_L, data = null, active = null, firstDraw = true;
   const pass = handoff && handoff.rid === rid && handoff.level === level ? handoff : null;
   handoff = null;
 
   const sub = h("p", { class: "view-sub" });
   const tools = h("div", { class: "layer-tools" });
+  const start = h("div", { class: "layer-start" });
   const scroll = h("div", { class: "layer-scroll", tabindex: "0", role: "region", "aria-label": `L${level} ${LV[level].name} map` });
   const more = h("button", { class: "btn", type: "button", hidden: true, onclick: async () => {
     if (more.getAttribute("aria-disabled") === "true") return;
@@ -268,15 +267,10 @@ export async function layer(view, rid, level) {
   const moreBox = h("div", { class: "layer-more" }, more);
   const edge = () => scroll.classList.toggle("more-x", scroll.scrollLeft + scroll.clientWidth < scroll.scrollWidth - 4);
   scroll.addEventListener("scroll", edge, { passive: true });
-  const arrows = h("button", { class: "seg-b", type: "button", "aria-pressed": "false", onclick: () => {
-    every = !every;
-    arrows.setAttribute("aria-pressed", String(every));
-    root.classList.toggle("show-every", every);
-  } }, "Show all arrows");
   const head = h("header", { class: "view-head" },
     h("a", { class: "btn quiet back", href: link.repo(rid), html: icon("back") + "<span>All five layers</span>" }),
     h("h1", {}, lvTag(level), " ", LV[level].name), sub);
-  const root = h("div", { class: "layer-view", style: { "--tint": `var(--l${level})` } }, head, tools, scroll, moreBox);
+  const root = h("div", { class: "layer-view", style: { "--tint": `var(--l${level})` } }, head, start, tools, scroll, moreBox);
   if (!pass) fill(scroll, skeleton(6));
   fill(view, root);
 
@@ -296,17 +290,12 @@ export async function layer(view, rid, level) {
       const fresh = data.nodes.filter((n) => !before.has(n.id));
       if (fresh.length && !fresh.some((n) => active.has(n.role))) fresh.forEach((n) => active.add(n.role));
     }
-    const kids = [];
-    if (present.length > 1) {
-      kids.push(h("div", { class: "seg", role: "group", "aria-label": "Show" },
-        present.map((r) => h("button", { class: "seg-b", type: "button", "aria-pressed": String(active.has(r)), onclick: (e) => {
-          if (active.has(r) && active.size > 1) active.delete(r); else active.add(r);
-          e.currentTarget.setAttribute("aria-pressed", String(active.has(r)));
-          draw();
-        } }, ROLE[r], h("span", { class: "seg-n" }, num(data.nodes.filter((n) => n.role === r).length))))));
-    }
-    kids.push(arrows);
-    fill(tools, kids);
+    fill(tools, present.length > 1 ? h("div", { class: "seg", role: "group", "aria-label": "Show" },
+      present.map((r) => h("button", { class: "seg-b", type: "button", "aria-pressed": String(active.has(r)), onclick: (e) => {
+        if (active.has(r) && active.size > 1) active.delete(r); else active.add(r);
+        e.currentTarget.setAttribute("aria-pressed", String(active.has(r)));
+        draw();
+      } }, ROLE[r], h("span", { class: "seg-n" }, num(data.nodes.filter((n) => n.role === r).length))))) : null);
     more.hidden = data.total <= data.nodes.length;
     more.textContent = `Load ${num(Math.min(PAGE_L * 2, data.total - data.nodes.length))} more`;
     draw();
@@ -317,62 +306,73 @@ export async function layer(view, rid, level) {
     const shown = data.nodes.filter((n) => active.has(n.role));
     const ranks = [...new Set(shown.map((n) => n.rank))].sort((a, b) => a - b);
     const map = h("div", { class: "layer-map" + (level <= 1 ? " is-code" : "") });
-    const svg = document.createElementNS(NS, "svg");
-    svg.setAttribute("class", "wires");
-    svg.setAttribute("aria-hidden", "true");
-    map.append(svg);
+    // where to start: hand-written code that calls the most other parts here, which is where reading naturally begins
+    const ids = new Set(shown.map((n) => n.id));
+    const links = data.links.filter((l) => ids.has(l.source) && ids.has(l.target));
+    const outs = new Map(), ins = new Map();
+    links.forEach((l) => { outs.set(l.source, (outs.get(l.source) || 0) + 1); ins.set(l.target, (ins.get(l.target) || 0) + 1); });
+    const generated = /\.gen\.|generated|_pb2|\.d\.ts$|routeTree/i;
+    const best = shown.length > 5 ? [...shown].filter((n) => n.role === "app" && outs.get(n.id) && !generated.test(n.path || n.label))
+      .sort((a, b) => (outs.get(b.id) - outs.get(a.id)) || ((ins.get(b.id) || 0) - (ins.get(a.id) || 0)) || a.rank - b.rank).slice(0, 3) : [];
+    const starred = new Set(best.map((n) => n.id));
+    fill(start, best.length ? [h("span", { class: "layer-start-k" }, "Not sure where to begin? Start here:"),
+      best.map((n) => h("a", { class: "start-chip" + (level <= 1 ? " mono" : ""), href: link.node(rid, n.id) }, label(n)))] : null);
 
     const under = (n) => level === 2 ? n.path : level === 1 ? (n.path || "").split("/").slice(0, -1).join("/") : level === 0 ? (n.path || "").split("/").pop() : "";
     ranks.forEach((r) => {
       const col = shown.filter((n) => n.rank === r).sort((a, b) =>
-        String(a.parent).localeCompare(String(b.parent)) || (b.deg_in + b.deg_out) - (a.deg_in + a.deg_out));
+        (starred.has(b.id) - starred.has(a.id)) || String(a.parent).localeCompare(String(b.parent)) || (b.deg_in + b.deg_out) - (a.deg_in + a.deg_out));
       map.append(h("ul", { class: "layer-col" }, col.map((n) => h("li", {},
-        h("a", { class: "node" + (n.role !== "app" ? " is-side" : ""), href: link.node(rid, n.id), dataset: { id: n.id },
+        h("a", { class: "node" + (n.role !== "app" ? " is-side" : "") + (starred.has(n.id) ? " is-start" : ""), href: link.node(rid, n.id), dataset: { id: n.id },
           title: [n.path, n.role !== "app" ? ROLE[n.role] : ""].filter(Boolean).join(" · ") || n.label },
+          starred.has(n.id) ? h("span", { class: "node-flag" }, "Start here") : null,
           h("span", { class: "node-t" + (level <= 1 ? " mono" : "") }, label(n)),
-          under(n) ? h("span", { class: "node-s" }, soft(under(n))) : null)))));
+          under(n) ? h("span", { class: "node-s" }, soft(under(n))) : null,
+          h("span", { class: "node-rel", "aria-hidden": "true" }))))));
     });
     fill(scroll, map);
     scroll.scrollLeft = at[0];
     scroll.scrollTop = at[1];
-
-    const ids = new Set(shown.map((n) => n.id));
-    const links = data.links.filter((l) => ids.has(l.source) && ids.has(l.target)).slice(0, MAX_WIRES);
-    fill(sub, `${LV[level].hint} · ${num(shown.length)} of ${num(data.total)} · callers on the left, what they call on the right. Point at a card to see its arrows.`);
-
-    const els = Object.fromEntries([...map.querySelectorAll(".node")].map((e) => [e.dataset.id, e]));
-    const paths = links.map((l) => {
-      const p = document.createElementNS(NS, "path");
-      p.setAttribute("marker-end", "url(#arw-l)");
-      svg.append(p);
-      return { l, p };
-    });
-    svg.insertAdjacentHTML("afterbegin", `<defs><marker id="arw-l" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1.5 1.5 8 5 1.5 8.5" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`);
-    const place = () => {
-      const box = {};
-      const get = (id) => (box[id] ||= boxIn(els[id], map));
-      paths.forEach(({ l, p }) => p.setAttribute("d", curve(get(l.source), get(l.target), ZERO, "flow")));
-    };
-    place();
+    fill(sub, `${LV[level].hint} · ${num(shown.length)} of ${num(data.total)} · callers on the left, what they call on the right. Point at a card to see what it's connected to; click it for its mind map.`);
     edge();
-    onResize(map, () => { place(); edge(); });
+    onResize(map, edge);
 
-    const near = new Map();
+    const callers = new Map(), callees = new Map();
     links.forEach((l) => {
-      if (!near.has(l.source)) near.set(l.source, new Set());
-      if (!near.has(l.target)) near.set(l.target, new Set());
-      near.get(l.source).add(l.target);
-      near.get(l.target).add(l.source);
+      if (!callees.has(l.source)) callees.set(l.source, new Set());
+      if (!callers.has(l.target)) callers.set(l.target, new Set());
+      callees.get(l.source).add(l.target);
+      callers.get(l.target).add(l.source);
     });
+    const els = Object.fromEntries([...map.querySelectorAll(".node")].map((e) => [e.dataset.id, e]));
+    const byId = new Map(data.nodes.map((n) => [n.id, n]));
+    // the side panel lists the pointed-at card's connections by name, so nothing has to be scrolled into view
+    const peek = (id) => {
+      const box = document.getElementById("layer-peek"), n = byId.get(id);
+      if (!box || !n) return;
+      const rows = (title, set) => {
+        const list = [...(set || [])].map((k) => byId.get(k)).filter(Boolean);
+        return list.length ? [h("h3", {}, title, " ", h("span", { class: "count" }, num(list.length))),
+          h("ul", { class: "rows" }, list.map((m) => h("li", {}, h("a", { class: "row-link", href: link.node(rid, m.id) },
+            h("span", { class: "row-t" + (level <= 1 ? " mono" : "") }, label(m)), h("span", { class: "row-s" }, (m.path || "").split("/").slice(-2, -1)[0] || "")))))] : [];
+      };
+      fill(box, h("p", { class: "peek-name" }, h("span", { class: level <= 1 ? "mono" : "" }, label(n))),
+        rows("Called by", callers.get(id)), rows("Calls", callees.get(id)),
+        !callers.get(id) && !callees.get(id) ? h("p", { class: "pane-note" }, "Nothing on this layer calls it or is called by it.") : null);
+    };
     let off = 0;
     const light = (id) => {
+      if (id) peek(id);
       map.classList.toggle("has-hot", !!id);
-      const mine = (id && near.get(id)) || new Set();
+      const ins = (id && callers.get(id)) || new Set(), outs = (id && callees.get(id)) || new Set();
       Object.values(els).forEach((e) => {
-        e.classList.toggle("is-hot", e.dataset.id === id);
-        e.classList.toggle("is-near", mine.has(e.dataset.id));
+        const k = e.dataset.id, isIn = ins.has(k), isOut = outs.has(k);
+        e.classList.toggle("is-hot", k === id);
+        e.classList.toggle("is-caller", isIn && !isOut);
+        e.classList.toggle("is-callee", isOut && !isIn);
+        e.classList.toggle("is-both", isIn && isOut);
+        e.querySelector(".node-rel").textContent = isIn && isOut ? "Calls it · called by it" : isIn ? "Calls it" : isOut ? "Called by it" : "";
       });
-      paths.forEach(({ l, p }) => p.classList.toggle("is-hot", !!id && (l.source === id || l.target === id)));
     };
     Object.values(els).forEach((e) => {
       const on = () => { clearTimeout(off); light(e.dataset.id); };
@@ -393,7 +393,7 @@ export async function layer(view, rid, level) {
           { transformOrigin: "0 0", transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})` },
           { transformOrigin: "0 0", transform: "none" }], { duration: 280, easing: "cubic-bezier(.23,1,.32,1)" });
         map.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, delay: 90, easing: "ease-out", fill: "backwards" });
-        [head, tools, moreBox].forEach((e) => e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 60, easing: "ease-out", fill: "backwards" }));
+        [head, start, tools, moreBox].forEach((e) => e.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 160, delay: 60, easing: "ease-out", fill: "backwards" }));
       } else {
         scroll.classList.add("is-direct");
       }
@@ -432,9 +432,11 @@ export async function focus(view, rid, nodeId) {
 
   const name = d ? nameOf(d) : `${repo.owner}/${repo.name}`;
   const code = d && d.level <= 1;
-  const path = d && d.breadcrumbs && d.breadcrumbs.length
+  // a part that only repeats its parent's name adds nothing to the path
+  const crumbs = d && d.breadcrumbs ? d.breadcrumbs.filter((b, i, all) => !i || b.label.toLowerCase() !== all[i - 1].label.toLowerCase()) : [];
+  const path = crumbs.length
     ? h("nav", { class: "mm-path", "aria-label": "Part of" }, h("span", { class: "mm-path-k" }, "Part of"),
-      h("ol", {}, d.breadcrumbs.map((b) => h("li", {}, lvTag(b.level), h("a", { href: link.node(rid, b.id) }, b.label)))))
+      h("ol", {}, crumbs.map((b) => h("li", {}, lvTag(b.level), h("a", { href: link.node(rid, b.id) }, b.label)))))
     : null;
   const scroll = h("div", { class: "mm-scroll" });
   const empty = d && !branches.some((b) => b.total)
@@ -445,8 +447,8 @@ export async function focus(view, rid, nodeId) {
         html: icon("back") + `<span>${d ? `L${d.level} ${LV[d.level].name}` : "All five layers"}</span>` }),
       h("h1", { class: code ? "mono" : "" }, code ? soft(name) : name),
       path,
-      h("p", { class: "view-sub" }, d ? "Open a branch with its arrow. Click any name to put it in the centre."
-        : "The whole repository, from its big parts down to single functions. Open a branch with its arrow."),
+      h("p", { class: "view-sub" }, d ? "Click anything to grow its branch. Its details show on the right."
+        : "The whole repository, from its big parts down to single functions. Click anything to grow its branch."),
       h("button", { class: "btn to-panel", type: "button",
         onclick: () => document.getElementById("panel").scrollIntoView({ behavior: reduced() ? "auto" : "smooth" }) }, d ? "Details · code · ask" : "Guide · ask")),
     empty, scroll);
@@ -455,6 +457,11 @@ export async function focus(view, rid, nodeId) {
     rid, flat: !d,
     root: { node: d ? { id: d.id, level: d.level } : null, label: name, sub: d ? `L${d.level} ${LV[d.level].name}` : "Repository" },
     branches,
+    onSelect: (item) => {
+      state.sel = item ? item.id : null;
+      state.selName = item ? nameOf(item) : null;
+      document.dispatchEvent(new Event("atlas:select"));
+    },
   });
   cleanup.push(() => map.stop());
   if (!reduced()) scroll.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });

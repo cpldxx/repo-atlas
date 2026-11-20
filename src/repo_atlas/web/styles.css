@@ -196,8 +196,8 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .layer-scroll.more-x { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
 .layer-scroll.is-direct .layer-map { animation: laid .2s ease-out; }
 @keyframes laid { from { opacity: 0; } }
-.layer-map { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 210px); gap: 10px 64px; align-items: start; width: max-content; min-width: 100%; padding: 28px; }
-.layer-map.is-code { grid-auto-columns: minmax(170px, 240px); }
+.layer-map { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 200px); gap: 10px 28px; align-items: start; width: max-content; min-width: 100%; padding: 28px; }
+.layer-map.is-code { grid-auto-columns: minmax(160px, 200px); }
 .layer-col { display: grid; gap: 8px; position: relative; z-index: 1; align-content: start; }
 .layer-col > li { display: grid; }
 .node { position: relative; display: grid; gap: 1px; padding: 9px 12px; border-radius: 11px; background: var(--card); border: 1px solid var(--line-2); text-decoration: none;
@@ -208,14 +208,28 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .node.is-side { background: var(--sand); border-style: dashed; }
 .node-t { font-weight: 600; font-size: 13.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .node-s { font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.4; }
-.wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
-.layer-map .wires path { fill: none; stroke: var(--apricot-deep); stroke-width: 1.5; opacity: 0; transition: opacity .15s; }
-.show-every .layer-map .wires path { opacity: .28; }
-.layer-map.has-hot .wires { z-index: 2; }
-.layer-map.has-hot .wires path { opacity: 0; }
-.show-every .layer-map.has-hot .wires path { opacity: .06; }
-.layer-map.has-hot .wires path.is-hot { opacity: 1; }
-.layer-map.has-hot .node:not(.is-hot):not(.is-near) { opacity: .45; }
+/* pointing at a card colours what calls it (sage) and what it calls (apricot); everything else steps back */
+.node-rel { font-size: 11.5px; font-weight: 700; letter-spacing: .01em; }
+.node-rel:empty { display: none; }
+.node.is-hot { border-color: var(--ink); box-shadow: var(--shadow-up); }
+.node.is-caller { border-color: #9DBA90; background: var(--sage-wash); }
+.node.is-caller .node-rel { color: var(--sage); }
+.node.is-callee { border-color: var(--apricot); background: var(--apricot-wash); }
+.node.is-callee .node-rel { color: var(--apricot-ink); }
+.node.is-both { border-color: var(--apricot); background: linear-gradient(90deg, var(--sage-wash), var(--apricot-wash)); }
+.node.is-both .node-rel { color: var(--ink-2); }
+.layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) { opacity: .35; }
+/* where to begin */
+.node.is-start { border-color: var(--apricot); box-shadow: 0 0 0 3px var(--apricot-wash); }
+.node-flag { justify-self: start; margin-bottom: 3px; padding: 1px 7px; border-radius: 999px; background: var(--apricot); color: var(--ink); font-size: 11px; font-weight: 700; }
+.layer-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; font-size: 13.5px; }
+.layer-start:empty { display: none; }
+.layer-start-k { color: var(--ink-2); margin-right: 2px; }
+.start-chip { display: inline-flex; align-items: center; min-height: 32px; padding: 4px 12px; border-radius: 999px; background: var(--apricot-wash); border: 1px solid var(--apricot); color: var(--ink);
+  font-weight: 600; text-decoration: none; transition: background-color .15s, transform .16s cubic-bezier(.23, 1, .32, 1); }
+.start-chip.mono { font-family: var(--mono); font-size: 12.5px; }
+.start-chip:hover { background: var(--apricot-soft); }
+.start-chip:active { transform: scale(.97); }
 .layer-more { margin-top: 12px; }
 
 /* ---- the mind map ---- */
@@ -233,12 +247,16 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .mm-scroll { cursor: grab; }
 .mm-scroll.is-dragging { cursor: grabbing; user-select: none; }
 .mm-node { cursor: auto; }
-.mm-canvas { position: relative; min-width: 100%; min-height: 100%; }
+.mm-sizer { position: relative; }
+.mm-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .mm-wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .mm-wires path { fill: none; stroke: var(--latte); stroke-width: 1.6; stroke-linecap: round; transition: stroke .15s; }
 .mm-wires path.is-hot { stroke: var(--apricot-deep); stroke-width: 2; }
-.mm-node { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 8px; max-width: 320px; min-height: 38px; padding: 7px 8px 7px 14px;
-  border: 1px solid var(--line-2); border-radius: 12px; background: var(--card); color: var(--ink); font: 500 13.5px/1.3 var(--font); white-space: nowrap; }
+.mm-node { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 8px; max-width: 300px; min-height: 38px; padding: 7px 8px 7px 14px; margin: 0;
+  border: 1px solid var(--line-2); border-radius: 12px; background: var(--card); color: var(--ink); font: 500 13.5px/1.3 var(--font); text-align: left; white-space: nowrap; cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, background-color .15s; }
+.mm-node.is-picked { border-color: var(--apricot-deep); box-shadow: 0 0 0 3px var(--apricot-soft); }
+.mm-node.is-root.is-picked { box-shadow: 0 0 0 3px var(--apricot-soft), 0 6px 18px -8px rgba(217, 122, 69, .55); }
 .mm-node.is-leaving { pointer-events: none; }
 .mm-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-decoration: none; color: inherit; }
 .mm-node.is-root { flex-direction: column; align-items: flex-start; gap: 0; padding: 12px 20px; border: 0; background: var(--apricot); max-width: 360px; box-shadow: 0 6px 18px -8px rgba(217, 122, 69, .55); }
@@ -253,24 +271,20 @@ button.mm-node { cursor: pointer; transition: border-color .15s, box-shadow .15s
 .mm-node.is-group:hover { border-color: var(--apricot-deep); }
 .mm-node.is-item { padding-left: 12px; }
 .mm-node.is-item:hover { border-color: var(--apricot); box-shadow: var(--shadow); }
-.mm-node.is-item .mm-t { display: inline-flex; align-items: center; gap: 8px; }
-.mm-node.is-item .mm-t:hover span { text-decoration: underline; }
-.mm-node.is-item .mm-t span { overflow: hidden; text-overflow: ellipsis; }
+.mm-node.is-item.is-open { background: var(--apricot-wash); }
+.mm-node:active { transform-origin: center; }
 .mm-dot { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--tint); box-shadow: inset 0 0 0 1px rgba(169, 82, 31, .25); }
 .mm-node.is-loop { border-style: dashed; color: var(--ink-2); }
 .mm-node.is-more { background: transparent; border-style: dashed; color: var(--ink-2); font-size: 13px; padding-right: 14px; }
 .mm-node.is-more:hover { color: var(--ink); border-color: var(--ink-3); }
 .mm-count { font: 600 12px var(--font); font-variant-numeric: tabular-nums; color: var(--ink-2); }
 .mm-chev { display: grid; color: var(--ink-2); transition: transform .2s var(--ease); }
-.mm-node.is-group.is-open .mm-chev, .mm-open.is-open .mm-chev { transform: rotate(180deg); }
+.mm-node.is-open .mm-chev { transform: rotate(180deg); }
 .mm-node.is-group .mm-count { padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, .75); }
-.mm-open { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 4px 0 9px; border: 0; border-radius: 999px; background: var(--sand); cursor: pointer;
-  transition: background-color .15s, transform .16s cubic-bezier(.23, 1, .32, 1); }
-.mm-open:hover { background: var(--apricot-soft); }
-.mm-open:active, button.mm-node:active { transform: scale(.96); }
-.mm-open.is-open { background: var(--apricot-soft); }
-.mm-open.is-open .mm-count { display: none; }
-.mm-open.is-open { padding: 0 4px; }
+.mm-open { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 26px; padding: 0 4px 0 9px; border-radius: 999px; background: var(--sand); transition: background-color .15s; }
+.mm-node.is-item:hover .mm-open { background: var(--apricot-soft); }
+.mm-node.is-open .mm-open { background: var(--apricot-soft); padding: 0 4px; }
+.mm-node.is-open .mm-open .mm-count { display: none; }
 .is-busy { cursor: progress; }
 .is-busy .mm-chev { animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -301,7 +315,12 @@ button.mm-node { cursor: pointer; transition: border-color .15s, box-shadow .15s
 .path { color: var(--ink-2); overflow-wrap: anywhere; margin-top: 2px; font-size: 13px; }
 .summary { margin-top: 12px; }
 .summary:empty { display: none; }
-.pane-info > p > .btn { margin-top: 14px; }
+.peek { margin-top: 18px; padding: 14px 14px 6px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); }
+.peek h3:first-of-type { margin-top: 10px; }
+.peek-name { font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
+.peek .pane-note { margin-block: 0 8px; }
+.pane-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.pane-acts:empty { display: none; }
 .count { font: 600 12px var(--font); font-variant-numeric: tabular-nums; color: var(--ink-3); margin-left: 4px; text-transform: none; letter-spacing: 0; }
 .rows { border-top: 1px solid var(--line); }
 .rows li { border-bottom: 1px solid var(--line); }

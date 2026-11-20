@@ -90,6 +90,8 @@ async function render() {
   const r = parseRoute();
   const prev = state.route;
   state.route = r;
+  state.sel = null;          // an item picked on the mind map belongs to that map only
+  state.selName = null;
   V.leave();
   shell.dataset.view = r.view;
   document.querySelector('.skip[href="#panel"]').hidden = r.view === "home";
@@ -160,6 +162,8 @@ async function render() {
 }
 
 addEventListener("hashchange", render);
+// picking an item on the mind map: the panel shows that item, and questions go to it
+document.addEventListener("atlas:select", () => { if (!panel.hidden) renderPanel(panel); });
 loadModel().then(() => { if (state.repo && state.route.view !== "home" && !panel.hidden) renderPanel(panel); });
 
 // Skip links move focus instead of changing the hash, which the router would read as a route.
