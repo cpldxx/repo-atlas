@@ -1,6 +1,6 @@
 {
   "name": "create-repo-atlas",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Read a GitHub repository once and explore it as five layers, a mind map, and answers written from the code. Runs on your machine.",
   "bin": {
     "create-repo-atlas": "bin/repo-atlas.js",
