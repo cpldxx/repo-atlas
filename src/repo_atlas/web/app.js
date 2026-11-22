@@ -163,7 +163,13 @@ async function render() {
 
 addEventListener("hashchange", render);
 // picking an item on the mind map: the panel shows that item, and questions go to it
-document.addEventListener("atlas:select", () => { if (!panel.hidden) renderPanel(panel); });
+document.addEventListener("atlas:select", () => {
+  if (panel.hidden) return;
+  const was = document.getElementById("ask-q"), draft = was ? was.value : "", typing = was && document.activeElement === was;
+  renderPanel(panel);
+  const input = document.getElementById("ask-q");   // a half-written question carries over to the new item
+  if (input && draft) { input.value = draft; if (typing) input.focus(); }
+});
 loadModel().then(() => { if (state.repo && state.route.view !== "home" && !panel.hidden) renderPanel(panel); });
 
 // Skip links move focus instead of changing the hash, which the router would read as a route.

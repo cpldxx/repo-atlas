@@ -1,4 +1,4 @@
-"""Read side: overview, one layer, the focus map around one node, node detail, overview."""
+"""Read side: overview, one layer, the focus map around one node, node detail, the reading-order tour."""
 from __future__ import annotations
 
 import re
@@ -75,7 +75,8 @@ def top_level(rid: str, n: dict, max_lines: int = 60) -> str:
         if not line.strip():
             continue
         if line[0] not in " \t)]}":
-            word = line.split("(")[0].split()[0] if line.split() else ""
+            first = line.split("(")[0].split()   # empty for a line that opens with "(", like `(async () => {`
+            word = first[0] if first else ""
             inside = word in ("def", "async", "class", "function", "export") and ("def " in line or "class " in line or "function " in line)
             if not inside and not line.startswith("@"):
                 out.append(line)
@@ -87,6 +88,12 @@ def top_level(rid: str, n: dict, max_lines: int = 60) -> str:
 
 
 _CONST = re.compile(r"^(?:export\s+)?(?:const\s+|let\s+|var\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*[^=]+)?=\s*(\S.{0,100})$")
+
+
+def _depth(text: str) -> int:
+    """How many brackets a line leaves open, not counting the ones inside quoted strings."""
+    bare = re.sub(r"\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'", "", text)
+    return sum(bare.count(o) for o in "([{") - sum(bare.count(c) for c in ")]}")
 
 
 def constants_used(rid: str, n: dict, code: str, limit: int = 6) -> list[str]:
@@ -102,13 +109,13 @@ def constants_used(rid: str, n: dict, code: str, limit: int = 6) -> list[str]:
         if not m or m.group(1) in names or not re.search(r"\b" + re.escape(m.group(1)) + r"\b", code):
             continue
         # a value written over several lines (`x = Thing(\n  a,\n  b,\n)`) is joined into one
-        text, depth, j = line.strip(), 0, i
-        depth = sum(text.count(o) for o in "([{") - sum(text.count(c) for c in ")]}")
+        text, j = line.strip(), i
+        depth = _depth(text)
         while depth > 0 and j + 1 < len(lines) and j - i < 8:
             j += 1
             part = lines[j].strip()
             text += ("" if text.endswith(("(", "[", "{")) else " ") + part
-            depth += sum(part.count(o) for o in "([{") - sum(part.count(c) for c in ")]}")
+            depth += _depth(part)
         names.add(m.group(1))
         found.append(text if len(text) <= 220 else text[:217] + "...")
         if len(found) >= limit:
@@ -127,7 +134,9 @@ def snippet(rid: str, n: dict, max_lines: int = 80) -> dict | None:
     lines = _lines(str(p), p.stat().st_mtime)
     if n["level"] == 0:
         start = n.get("line") or 1
-        last = n.get("end_line") if (n.get("end_line") or 0) > start else _block_end(lines, start)
+        # the stored end line is where the next symbol starts, so a class would stop before its own methods
+        known = (n.get("end_line") or 0) > start and n.get("kind") != "class"
+        last = n["end_line"] if known else _block_end(lines, start)
         end = min(last, start + max_lines - 1, len(lines))
         whole = last <= end
     else:
@@ -306,7 +315,7 @@ def branch(rid: str, nid: str | None, rel: str, limit: int = 12, offset: int = 0
     for n in page:
         c = card(n)
         callers, calls = counts.get(n["id"], (0, 0))
-        inside = _through(rid, n).get("children") or 0 if rel == "inside" else n.get("children") or 0
+        inside = _through(rid, n).get("children") or 0   # what opening it will show, whichever branch it is in
         c["counts"] = {"inside": inside, "calls": calls, "callers": callers}
         if n["id"] in weights:
             c["weight"] = weights[n["id"]]

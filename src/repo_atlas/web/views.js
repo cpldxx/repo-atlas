@@ -348,7 +348,7 @@ export async function layer(view, rid, level) {
     scroll.scrollTop = at[1];
     fill(sub, `${LV[level].hint} · ${num(shown.length)} of ${num(data.total)} · callers on the left, what they call on the right. Point at a card to see what it's connected to; click it for its mind map.`);
     edge();
-    onResize(map, edge);
+    onResize(map, () => { edge(); redraw(); });   // cards may have moved or changed height: lines are measured again
 
     const callers = new Map(), callees = new Map();
     links.forEach((l) => {
@@ -377,11 +377,12 @@ export async function layer(view, rid, level) {
     // lines grow out of the pointed-at card: in from what calls it (sage), out to what it calls (apricot).
     // Each line gets its own spot on the card's edge, at the height of the card it leads to, so arrows never pile up.
     // each column's x and the vertical spans its cards take up, for finding the gaps between cards
-    const cols = [...map.querySelectorAll(".layer-col")].map((ul) => {
+    // (measured each time lines are drawn, so a resized window never leaves them routed around old positions)
+    const measure = () => [...map.querySelectorAll(".layer-col")].map((ul) => {
       const cards = [...ul.querySelectorAll(".node")].map((e) => boxIn(e, map));
       return { x: cards.length ? cards[0].left : 0, spans: cards.map((b) => [b.top - 5, b.bottom + 5]) };
     });
-    let lanes = [];
+    let lanes = [], cols = [];
     // the height nearest to y where a line passes every given column without touching a card (or another lane)
     const freeLane = (between, y) => {
       const ok = (v) => between.every((c) => c.spans.every(([t, b]) => v <= t || v >= b)) && lanes.every((u) => Math.abs(u - v) >= 6);
@@ -421,6 +422,7 @@ export async function layer(view, rid, level) {
       lines.replaceChildren();
       lanes = [];
       if (!id || !els[id]) return;
+      cols = measure();
       const me = boxIn(els[id], map), inSet = callers.get(id) || new Set();
       const items = [];
       inSet.forEach((k) => { if (els[k]) items.push({ k, kind: "in" }); });
@@ -482,6 +484,7 @@ export async function layer(view, rid, level) {
           { duration: 240, easing: "cubic-bezier(.23,1,.32,1)" });
       });
     };
+    const redraw = () => { const id = drawn; drawn = null; drawLines(id); };
     const light = (id) => {
       if (id) peek(id);
       map.classList.toggle("has-hot", !!id);

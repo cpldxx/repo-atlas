@@ -271,7 +271,7 @@ def code_words(question: str) -> str:
             {"role": "user", "content": f"A question about a codebase: {question[:600]!r}\n"
                                         "List up to 6 short words or identifiers likely to appear in the code that answers it "
                                         "(function or method names, library calls, keywords). Reply as {\"terms\": [\"...\"]}."},
-        ], json_mode=True, temperature=0, effort="low", timeout=90)
+        ], json_mode=True, temperature=0, effort="low", timeout=15)   # optional: never hold the answer up for long
         data = json.loads(raw) if isinstance(raw, str) else raw
         terms = data.get("terms", []) if isinstance(data, dict) else []
         return " ".join(str(t)[:40] for t in terms[:6] if isinstance(t, (str, int)))

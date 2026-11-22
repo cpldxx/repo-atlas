@@ -7,6 +7,7 @@ const enc = encodeURIComponent;
 // the item picked on the mind map, if any (otherwise the panel follows the page)
 const picked = () => (state.route.view === "focus" || state.route.view === "map") && state.sel ? state.sel : null;
 const shownNode = () => picked() || state.route.node;
+let readyHook = null; // the one ask pane waiting for the repo to finish loading
 let mounted = null;   // the ask pane that is on screen right now; a streaming answer always paints into this one
 
 export function renderPanel(panel) {
@@ -251,8 +252,11 @@ function ask(pane, reveal) {
     question = question.trim();
     if (!question || busy()) return;
     reveal();
-    const t = { q: question, scope: scopeLabel(), text: "", sources: [], cited: [], done: false };
-    const history = chat.filter((x) => x.done && !x.error).slice(-2).flatMap((x) => [{ role: "user", content: x.q }, { role: "assistant", content: x.text }]);
+    const key = JSON.stringify(scope);
+    const t = { q: question, scope: scopeLabel(), key, text: "", sources: [], cited: [], done: false };
+    // only earlier turns about the same thing count as the conversation so far: a question about another item is new
+    const history = chat.filter((x) => x.done && !x.error && x.key === key).slice(-2)
+      .flatMap((x) => [{ role: "user", content: x.q }, { role: "assistant", content: x.text }]);
     chat.push(t);
     input.value = "";
     if (chat.length === 1) fill(log);
@@ -280,6 +284,8 @@ function ask(pane, reveal) {
   fill(pane, log, form);
   mounted = { pane, sync };
   setScope();
+  if (readyHook) document.removeEventListener("atlas:ready", readyHook);
+  readyHook = setScope;
   document.addEventListener("atlas:ready", setScope, { once: true });
   sync();
   pane.scrollTop = pane.scrollHeight;

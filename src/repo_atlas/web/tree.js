@@ -73,12 +73,19 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false, o
     if (!T.kids) {
       T.loading = true;
       busy(T, true);
-      try { await load(T); } catch (err) { T.loading = false; busy(T, false); T.el.classList.add("is-error"); T.el.title = err.message; return; }
+      try { await load(T); } catch (err) {
+        T.loading = false;
+        busy(T, false);
+        if (T.el) { T.el.classList.add("is-error"); T.el.title = err.message; }
+        return;
+      }
       T.loading = false;
       busy(T, false);
     }
     T.open = true;
     sync(T);
+    // its parent was closed while the branch loaded: it opens with the rest the next time it is shown
+    if (!T.el || !T.el.isConnected) return;
     layout(T, true);
   }
   function pick(T) {
@@ -319,6 +326,8 @@ export function mindMap(scroll, { rid, root: rootInfo, branches, flat = false, o
   let drag = null;
   scroll.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.pointerType === "touch" || e.target.closest(".mm-node")) return;
+    // a press on the box's own scrollbars is for the scrollbar, not for dragging the map
+    if (e.target === scroll && (e.offsetX >= scroll.clientWidth || e.offsetY >= scroll.clientHeight)) return;
     drag = { x: e.clientX, y: e.clientY, l: scroll.scrollLeft, t: scroll.scrollTop, id: e.pointerId };
     scroll.setPointerCapture(e.pointerId);
     scroll.classList.add("is-dragging");

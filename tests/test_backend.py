@@ -111,6 +111,27 @@ def test_code_of_a_function_without_an_end_line_stops_at_the_next_one():
     assert query._block_end(src, 7) == 8
 
 
+def test_top_level_code_and_constants_survive_odd_lines(monkeypatch):
+    from repo_atlas import query
+    src = ("import x", "(async () => {", "  await main()", "})()", 'PATTERN = r"[("', "LIMIT = 3")
+    monkeypatch.setattr(query, "_source_lines", lambda rid, n: src)
+    assert query.top_level("r", {"path": "a.js"}).splitlines()[0] == "import x"   # a line opening with "(" used to crash
+    assert query.constants_used("r", {"path": "a.js"}, "re.match(PATTERN) and LIMIT") == ['PATTERN = r"[("', "LIMIT = 3"]
+
+
+def test_class_code_runs_through_its_methods(tmp_path, monkeypatch):
+    from repo_atlas import config, query
+    monkeypatch.setattr(config, "REPOS", tmp_path / "repos")
+    f = tmp_path / "repos" / "o__r" / "src" / "k.py"
+    f.parent.mkdir(parents=True)
+    f.write_text('class K:\n    """Doc."""\n    x = 1\n\n    def a(self):\n        return 1\n\n    def b(self):\n        return 2\n\ndef after():\n    pass\n')
+    # the stored end line (4) stops where the first method starts; the code shown must still include the methods
+    snip = query.snippet("o__r", {"level": 0, "path": "k.py", "line": 1, "end_line": 4, "kind": "class"})
+    assert (snip["start"], snip["end"]) == (1, 9) and snip["text"].splitlines()[-1].strip() == "return 2"
+    fn = query.snippet("o__r", {"level": 0, "path": "k.py", "line": 5, "end_line": 7, "kind": "method"})
+    assert (fn["start"], fn["end"]) == (5, 7)   # anything else keeps its stored end line
+
+
 def test_api_on_a_stored_graph(built, tmp_path, monkeypatch):
     from repo_atlas import config, llm, store
     monkeypatch.setattr(config, "DATA", tmp_path)
