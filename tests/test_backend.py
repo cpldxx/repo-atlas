@@ -111,6 +111,16 @@ def test_code_of_a_function_without_an_end_line_stops_at_the_next_one():
     assert query._block_end(src, 7) == 8
 
 
+def test_code_of_a_function_keeps_going_through_a_multi_line_string():
+    from repo_atlas import query
+    src = ("def usage():", '    text = """', "Usage: tool [options]", "", "  -h  help", '"""', "    return text", "",
+           "def after():", "    return '\"\"\"'", "",
+           "def sql():", "    q = '''", "SELECT 1", "'''  # it's done", "    return q", "", "X = 1")
+    assert query._block_end(src, 1) == 7        # column-0 lines inside the triple-quoted string don't end it
+    assert query._block_end(src, 9) == 10       # triple quotes inside an ordinary string open nothing
+    assert query._block_end(src, 12) == 16      # the string closes mid-line; the next column-0 line still ends it
+
+
 def test_top_level_code_and_constants_survive_odd_lines(monkeypatch):
     from repo_atlas import query
     src = ("import x", "(async () => {", "  await main()", "})()", 'PATTERN = r"[("', "LIMIT = 3")

@@ -41,18 +41,43 @@ def _lines(path: str, mtime: float) -> tuple[str, ...]:
     return tuple(Path(path).read_text(errors="replace").splitlines())
 
 
+_QUOTED = re.compile(r"""\"{3}|'{3}|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|#.*""")
+
+
+def _open_string(text: str, delim: str | None) -> str | None:
+    """The triple quote still open at the end of a line, given the one open at its start (None for neither)."""
+    pos = 0
+    while True:
+        if delim:
+            at = text.find(delim, pos)
+            if at < 0:
+                return delim
+            pos, delim = at + 3, None
+        else:
+            m = _QUOTED.search(text, pos)
+            if not m:
+                return None
+            if m.group() in ('"""', "'''"):
+                delim = m.group()
+            pos = m.end()
+
+
 def _block_end(lines: tuple[str, ...], start: int) -> int:
     """Last line of the definition starting at `start` (1-based) when the graph has no end line for it: the line
-    before the next one indented no deeper than the definition itself (closing brackets excepted)."""
+    before the next one indented no deeper than the definition itself (closing brackets excepted, and lines inside
+    a triple-quoted string, which may sit at any column)."""
     first = lines[start - 1] if 0 < start <= len(lines) else ""
     indent = len(first) - len(first.lstrip())
+    quote = _open_string(first, None)
     end = start
     for i in range(start, len(lines)):
         text = lines[i]
-        if text.strip() and len(text) - len(text.lstrip()) <= indent and not text.lstrip().startswith((")", "]", "}")):
+        if (not quote and text.strip() and len(text) - len(text.lstrip()) <= indent
+                and not text.lstrip().startswith((")", "]", "}"))):
             break
         if text.strip():
             end = i + 1
+        quote = _open_string(text, quote)
     return end
 
 
