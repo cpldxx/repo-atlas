@@ -227,7 +227,7 @@ a.repo-main:hover .repo-name { text-decoration: underline; }
 .node { z-index: 2; }
 .layer-map.has-hot .node:not(.is-hot):not(.is-caller):not(.is-callee):not(.is-both) { z-index: 0; }
 .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; z-index: 1; }
-.wires path.w-in, .wires path.w-out { fill: none; stroke-width: 2; stroke-linecap: round; }
+.wires path.w-in, .wires path.w-out, .wires path.w-both { fill: none; stroke-width: 2; stroke-linecap: round; }
 .wires .w-in { stroke: var(--sage); }
 .wires .w-out { stroke: var(--apricot-deep); }
 /* where to begin */

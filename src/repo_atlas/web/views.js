@@ -4,6 +4,7 @@ import { mindMap, PAGE } from "./tree.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const ARROW = 9;     // arrowhead length on the layer map
+const IN = "#557A4A", OUT = "#D97A45";   // layer map lines: what calls the card (sage), what it calls (apricot)
 let poll = null, pickTimer = null, handoff = null, cleanup = [];
 
 export function leave() {
@@ -315,7 +316,9 @@ export async function layer(view, rid, level) {
     // filled arrowheads whose tip is the very end of the line (refX = tip), sized in pixels, not by line width
     // The line stops where the arrowhead's base is and the head reaches the card, so no line pokes past its tip.
     const head = (id, color) => `<marker id="${id}" viewBox="0 0 10 10" refX="0" refY="5" markerUnits="userSpaceOnUse" markerWidth="${ARROW}" markerHeight="${ARROW}" orient="auto"><path d="M0 1 10 5 0 9z" fill="${color}"/></marker>`;
-    svg.innerHTML = `<defs>${head("arw-in", "#557A4A")}${head("arw-out", "#D97A45")}</defs>`;
+    // a card that calls the pointed-at card and is called back by it gets a second head at its own end, pointing back
+    const tail = `<marker id="arw-back" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="${ARROW}" markerHeight="${ARROW}" orient="auto"><path d="M10 1 0 5 10 9z" fill="${OUT}"/></marker>`;
+    svg.innerHTML = `<defs>${head("arw-in", IN)}${head("arw-out", OUT)}${tail}</defs>`;
     const lines = document.createElementNS(NS, "g");
     svg.append(lines);
     map.append(svg);
@@ -397,9 +400,10 @@ export async function layer(view, rid, level) {
     const GAP = parseFloat(getComputedStyle(map).columnGap) || 48, STUB = 5, LEAD = 7;
     const f = (n) => n.toFixed(1);
     const bendTo = (x0, y0, x1, y1) => { const k = (x1 - x0) * 0.55; return ` C${f(x0 + k)} ${f(y0)} ${f(x1 - k)} ${f(y1)} ${f(x1)} ${f(y1)}`; };
-    const route = (sx, sy, ex, ey, lane, far) => {
-      const s = ex > sx ? 1 : -1, end = ex - s * ARROW, approach = end - s * LEAD, start = sx + s * STUB;
-      let d = `M${f(sx)} ${f(sy)} L${f(start)} ${f(sy)}`;
+    // (back: the line also carries a head at its first end, so it starts one arrowhead away from that card)
+    const route = (sx, sy, ex, ey, lane, far, back) => {
+      const s = ex > sx ? 1 : -1, from = sx + (back ? s * ARROW : 0), end = ex - s * ARROW, approach = end - s * LEAD, start = from + s * STUB;
+      let d = `M${f(from)} ${f(sy)} L${f(start)} ${f(sy)}`;
       if (far) {
         // every line bends over the same stretch of each gap, so lines keep their order through it
         const out = sx + s * (GAP - ARROW - LEAD), into = ex - s * (GAP - STUB);
@@ -410,10 +414,10 @@ export async function layer(view, rid, level) {
       return d + ` L${f(end)} ${f(ey)}`;
     };
     // two cards in one column: out from the column's edge and back in, ending straight into the arrowhead
-    const bracket = (x, sy, ey, sign) => {
-      const end = x + sign * ARROW, approach = end + sign * LEAD, start = x + sign * STUB;
+    const bracket = (x, sy, ey, sign, back) => {
+      const from = x + (back ? sign * ARROW : 0), end = x + sign * ARROW, approach = end + sign * LEAD, start = from + sign * STUB;
       const bx = x + sign * (ARROW + LEAD + 10 + Math.min(30, Math.abs(ey - sy) * 0.08));
-      return `M${f(x)} ${f(sy)} L${f(start)} ${f(sy)} C${f(bx)} ${f(sy)} ${f(bx)} ${f(ey)} ${f(approach)} ${f(ey)} L${f(end)} ${f(ey)}`;
+      return `M${f(from)} ${f(sy)} L${f(start)} ${f(sy)} C${f(bx)} ${f(sy)} ${f(bx)} ${f(ey)} ${f(approach)} ${f(ey)} L${f(end)} ${f(ey)}`;
     };
     let drawn = null;
     const drawLines = (id) => {
@@ -423,10 +427,11 @@ export async function layer(view, rid, level) {
       lanes = [];
       if (!id || !els[id]) return;
       cols = measure();
-      const me = boxIn(els[id], map), inSet = callers.get(id) || new Set();
+      const me = boxIn(els[id], map), inSet = callers.get(id) || new Set(), outSet = callees.get(id) || new Set();
       const items = [];
-      inSet.forEach((k) => { if (els[k]) items.push({ k, kind: "in" }); });
-      (callees.get(id) || []).forEach((k) => { if (els[k] && !inSet.has(k)) items.push({ k, kind: "out" }); });
+      // two cards that call each other share one line with a head at each end
+      inSet.forEach((k) => { if (els[k]) items.push({ k, kind: "in", both: k !== id && outSet.has(k) }); });
+      outSet.forEach((k) => { if (els[k] && !inSet.has(k)) items.push({ k, kind: "out" }); });
       items.forEach((it) => {
         it.o = boxIn(els[it.k], map);
         it.side = it.o.left >= me.right - 1 ? "right" : it.o.right <= me.left + 1 ? "left" : "column";
@@ -466,17 +471,27 @@ export async function layer(view, rid, level) {
         let d;
         if (it.side === "column") {
           const sign = it.edge === "right" ? 1 : -1, x = it.edge === "right" ? me.right : me.left;
-          d = it.kind === "out" ? bracket(x, it.py, oy, sign) : bracket(x, oy, it.py, sign);
+          d = it.kind === "out" ? bracket(x, it.py, oy, sign) : bracket(x, oy, it.py, sign, it.both);
         } else {
           // metro-map style: lines leave in the order of the heights they travel, so they don't cross
           const far = it.between.length > 0, lane = it.first;
-          d = it.kind === "out" ? route(it.px, it.py, it.qx, oy, lane, far) : route(it.qx, oy, it.px, it.py, lane, far);
+          d = it.kind === "out" ? route(it.px, it.py, it.qx, oy, lane, far) : route(it.qx, oy, it.px, it.py, lane, far, it.both);
         }
         const p = document.createElementNS(NS, "path");
         p.setAttribute("d", d);
-        p.setAttribute("class", it.kind === "in" ? "w-in" : "w-out");
+        p.setAttribute("class", it.both ? "w-both" : it.kind === "in" ? "w-in" : "w-out");
         p.setAttribute("marker-end", `url(#arw-${it.kind})`);
         lines.append(p);
+        if (it.both) {
+          // apricot where it reaches the other card, sage where it reaches this one, like the two heads
+          const a = p.getPointAtLength(0), b = p.getPointAtLength(p.getTotalLength());
+          const g = document.createElementNS(NS, "linearGradient"), gid = `w-both-${lines.childElementCount}`;
+          Object.entries({ id: gid, gradientUnits: "userSpaceOnUse", x1: f(a.x), y1: f(a.y), x2: f(b.x), y2: f(b.y) }).forEach(([k, v]) => g.setAttribute(k, v));
+          g.innerHTML = `<stop offset=".35" stop-color="${OUT}"/><stop offset=".65" stop-color="${IN}"/>`;
+          lines.append(g);
+          p.setAttribute("stroke", `url(#${gid})`);
+          p.setAttribute("marker-start", "url(#arw-back)");
+        }
         if (reduced()) return;
         // the line draws itself from the caller's end toward the arrowhead
         const len = p.getTotalLength();
