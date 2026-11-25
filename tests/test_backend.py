@@ -53,7 +53,8 @@ def by_id(built):
 
 def test_parse_url_accepts_the_usual_forms():
     for u in ("https://github.com/pallets/flask", "https://github.com/pallets/flask.git", "github.com/pallets/flask/tree/main/src",
-              "pallets/flask"):
+              "pallets/flask", "https://github.com/pallets/flask?tab=readme-ov-file", "https://github.com/pallets/flask#readme",
+              "https://github.com/pallets/flask.git?x=1"):
         assert ingest.parse_url(u) == ("pallets", "flask")
 
 

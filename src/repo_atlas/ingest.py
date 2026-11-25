@@ -18,14 +18,14 @@ from pathlib import Path
 from . import config, describe, layering, retrieve, store
 
 GITHUB = re.compile(
-    r"^(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:/.*)?$")
+    r"^(?:https?://)?(?:www\.)?github\.com/([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9_.-]+?)(?:\.git)?(?:[/?#].*)?$")
 SHORT = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_.-]*)/([A-Za-z0-9_.-]+)$")
 _jobs: dict[str, threading.Thread] = {}
 _lock = threading.Lock()
 
 
 def parse_url(url: str) -> tuple[str, str]:
-    """Accept https://github.com/owner/repo (with or without extra path) or owner/repo."""
+    """Accept https://github.com/owner/repo (with or without extra path, ?query or #fragment) or owner/repo."""
     url = (url or "").strip()
     m = GITHUB.match(url) or SHORT.match(url)
     if not m:
