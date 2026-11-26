@@ -208,3 +208,29 @@ def test_api_on_a_stored_graph(built, tmp_path, monkeypatch):
     assert c.get("/api/repos/nope/focus", params={"node": "x"}).status_code == 404
     assert c.get("/api/repos/o__r/focus", params={"node": "missing"}).status_code == 404
     assert c.post("/api/repos", json={"url": "https://example.com/x/y"}).status_code == 422
+
+
+def test_search_falls_back_to_words_when_the_query_cannot_be_embedded(built, tmp_path, monkeypatch):
+    import httpx
+    import numpy as np
+    from repo_atlas import config, llm, retrieve, store
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "atlas.db")
+    monkeypatch.setattr(config, "REPOS", tmp_path / "repos")
+    monkeypatch.setattr(config, "SETTINGS_PATH", tmp_path / "config.json")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(retrieve, "_cache", {})
+    monkeypatch.setattr(llm, "models", lambda refresh=False: [])   # no chat model: the question returns its sources
+    store.init()
+    store.upsert_repo("o__v", url="https://github.com/o/v", owner="o", name="v", status="ready", stage="done")
+    store.replace_graph("o__v", built["nodes"], built["edges"])
+    one = np.ones(4, dtype=np.float32) / 2   # the repository was indexed with a 4-number embedding model
+    store.save_vecs("o__v", [(n["id"], one.tobytes()) for n in store.all_nodes("o__v")])
+
+    def stopped(texts):
+        raise httpx.ConnectError("connection refused")
+    for embed in (stopped, lambda texts: [[0.1] * 8]):   # Ollama went away / the embedding model changed since then
+        monkeypatch.setattr(llm, "embed", embed)
+        assert retrieve.search("o__v", "check password")[0]["id"] == "s:check"
+        events = list(retrieve.ask("o__v", "check password"))
+        assert events[0]["type"] == "sources" and events[-1]["type"] == "done"

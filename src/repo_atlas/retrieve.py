@@ -15,6 +15,7 @@ import re
 from collections import Counter
 from collections.abc import Iterator
 
+import httpx
 import numpy as np
 
 from . import config, llm, query, store
@@ -116,6 +117,21 @@ def _load(rid: str) -> dict:
     return idx
 
 
+def _query_vector(q: str, dim: int) -> np.ndarray | None:
+    """The query's embedding, or None when it can't be compared with the stored vectors: Ollama stopped or failed, or
+    the embedding model changed since the repository was indexed. Search then ranks by words alone."""
+    try:
+        qv = llm.embed(["search_query: " + q])
+    except (httpx.HTTPError, KeyError, ValueError):
+        return None
+    if not qv:
+        return None
+    v = np.asarray(qv[0], dtype=np.float32)
+    if v.shape != (dim,):
+        return None
+    return v / (np.linalg.norm(v) + 1e-9)
+
+
 def search(rid: str, q: str, k: int = 12, scope: set[str] | None = None, levels: set[int] | None = None) -> list[dict]:
     """Best-matching nodes for a query. Each result is a node dict with a 'score'."""
     idx = _load(rid)
@@ -140,10 +156,8 @@ def search(rid: str, q: str, k: int = 12, scope: set[str] | None = None, levels:
             kw[i] = s
     vec: dict[int, float] = {}
     if idx["mat"] is not None:
-        qv = llm.embed(["search_query: " + q])
-        if qv:
-            v = np.asarray(qv[0], dtype=np.float32)
-            v /= np.linalg.norm(v) + 1e-9
+        v = _query_vector(q, idx["mat"].shape[1])
+        if v is not None:
             sims = idx["mat"][cand] @ v
             vec = {cand[j]: float(sims[j]) for j in range(len(cand))}
     fused: Counter = Counter()
