@@ -54,7 +54,7 @@ README excerpt:
 Below are {what} of this repository. For each one write:
 - "title": a short human name in {LANG.get(lang, 'English')} (2-4 words) that says what it is for, not its folder name
   (every title must be different from the others)
-- "summary": one sentence in {LANG.get(lang, 'English')} saying what it does, for someone who just joined the team
+- "summary": one sentence in {LANG.get(lang, 'English')} saying what it does, for someone getting to know the codebase
 
 Use only what is shown here. Never guess what an unfamiliar name or abbreviation means: describe the part by
 what its files and main symbols do, and if that is still unclear say plainly what it contains.

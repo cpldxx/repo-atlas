@@ -132,3 +132,16 @@ def test_claude_requests_have_the_right_shape(env, fake_claude, monkeypatch):
     assert c.post("/api/settings/check").json() == {"ok": True, "message": "Connected to Claude (claude-haiku-5-5)."}
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-bad")
     assert c.post("/api/settings/check").json() == {"ok": False, "message": "That API key was rejected."}
+
+
+def test_model_prompts_address_anyone_reading_the_code_not_a_new_team_member(monkeypatch):
+    """The tool is for anyone who wants to understand a repository, so no prompt may frame the reader as a newcomer."""
+    from repo_atlas import describe, llm, retrieve
+    sent = []
+    monkeypatch.setattr(llm, "chat", lambda messages, **kw: sent.extend(messages) or "{}")
+    describe._ask({"owner": "o", "name": "r"}, "", {"p1": "path: app"}, "en", "top-level areas")
+    prompts = [m["content"] for m in sent] + list(retrieve.SYSTEM.values())
+    assert len(prompts) == 4
+    for text in prompts:
+        for phrase in ("joined the team", "new hire", "first day", "onboard", "새로 합류", "신입", "첫날"):
+            assert phrase not in text.lower(), phrase
